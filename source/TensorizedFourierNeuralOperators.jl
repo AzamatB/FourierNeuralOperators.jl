@@ -102,7 +102,7 @@ function (conv::TuckerSpectralConv{D})(
     dims = ntuple(identity, Val(D))
     y_padded = pad_constant(y, pad_tuple, false; dims)     # (freq_dims..., channels_out, batches)
     # apply inverse discrete Fourier transform: freq_dims -> spatial_dims
-    output = inverse(fourier_transform, y_padded, x)          # (spatial_dims..., channels_out, batches)
+    output = inverse(fourier_transform, y_padded, x)       # (spatial_dims..., channels_out, batches)
     return (output, states)
 end
 
@@ -215,8 +215,8 @@ end
 
 # expand Tucker core tensor into full tensor via mode products with factor matrices
 function expand_tucker_core_tensor(
-    core::DenseArray{Complex{R}}, U_modes::NTuple{D,DenseMatrix{R}}
-) where {D,R<:Real}
+    core::DenseArray{C}, U_modes::NTuple{D,DenseMatrix{C}}
+) where {C<:Complex,D}
     modes = size.(U_modes, 2)
     # core: (r_out, r_in, dims...)
     for d in 1:D
