@@ -225,25 +225,4 @@ function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,5}, param
     return output
 end
 
-function build_pad_tuple(x::DenseArray{<:Number,3}, y::DenseArray{<:Number,3})
-    p₁ = size(x, 1) - size(y, 1)
-    pad_tuple = (0, p₁, 0, 0, 0, 0)
-    return pad_tuple
-end
-
-function build_pad_tuple(x::DenseArray{<:Number,4}, y::DenseArray{<:Number,4})
-    p₁ = size(x, 1) - size(y, 1)
-    p₂ = size(x, 2) - size(y, 2)
-    pad_tuple = (0, p₁, 0, p₂, 0, 0, 0, 0)
-    return pad_tuple
-end
-
-function build_pad_tuple(x::DenseArray{<:Number,5}, y::DenseArray{<:Number,5})
-    p₁ = size(x, 1) - size(y, 1)
-    p₂ = size(x, 2) - size(y, 2)
-    p₃ = size(x, 3) - size(y, 3)
-    pad_tuple = (0, p₁, 0, p₂, 0, p₃, 0, 0, 0, 0)
-    return pad_tuple
-end
-
 end # module TensorizedFourierNeuralOperators
