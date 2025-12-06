@@ -215,4 +215,24 @@ function compute_tensor_contractions(ω_truncated::AbstractArray{<:Number,5}, pa
     return output
 end
 
+# expand Tucker core tensor into full tensor via mode products with factor matrices
+function expand_tucker_core_tensor(
+    core::DenseArray{Complex{R}}, U_modes::NTuple{D,DenseMatrix{R}}
+) where {D,R<:Real}
+    modes = size.(U_modes, 2)
+    # core: (r_out, r_in, dims...)
+    for d in 1:D
+        # k-mode tensor product via matricization + batched multiplication
+        k = d + 2
+        dims = size(core)
+        ranks_before = dims[1:(k - 1)]
+        ranks_after = dims[(k + 1):end]
+
+        core_flat = reshape(core, prod(ranks_before), dims[k], prod(ranks_after))
+        S_flat = batched_mul(core_flat, U_modes[d])
+        core = reshape(S_flat, ranks_before..., modes[d], ranks_after...)
+    end
+    return core
+end
+
 end # module TensorizedFourierNeuralOperators
