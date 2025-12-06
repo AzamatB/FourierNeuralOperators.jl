@@ -5,6 +5,7 @@ module TensorizedFourierNeuralOperators
 # See arxiv.org/abs/2310.00120 for details.
 
 using Lux
+using FFTW
 using Random
 using NNlib: batched_mul, pad_constant
 using NeuralOperators: FourierTransform, expand_pad_dims, inverse, transform, truncate_modes
@@ -100,12 +101,12 @@ function (conv::TuckerSpectralConv{D})(
     dims = ntuple(identity, Val(D))
     y_padded = pad_constant(y, pad_tuple, false; dims)     # (freq_dims..., channels_out, batches)
     # apply inverse discrete Fourier transform: freq_dims -> spatial_dims
-    output = inverse(fourier_transform, y_padded)          # (spatial_dims..., channels_out, batches)
+    output = inverse(fourier_transform, y_padded, x)          # (spatial_dims..., channels_out, batches)
     return (output, states)
 end
 
 # (m₁ × ch_in × b) -> (m₁ × ch_out × b)
-function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,3}, params::NamedTuple)
+function compute_tensor_contractions(ω_truncated::AbstractArray{<:Number,3}, params::NamedTuple)
     core = params.core          # (r_out × r_in × r₁)
     U_in = params.U_in          # (ch_in × r_in)
     U_out = params.U_out        # (ch_out × r_out)
@@ -117,7 +118,6 @@ function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,3}, param
 
     # contract r₁ -> m₁
     core_flat₁ = reshape(core, r_out * r_in, r₁)        # (r_out⋅r_in × r₁)
-    U₁ = U_modes[1]                                     # (r₁ × m₁)
     S_flat₁ = core_flat₁ * U₁                           # (r_out⋅r_in × m₁)
     S = reshape(S_flat₁, r_out, r_in, m₁)               # (r_out × r_in × m₁)
 
@@ -135,7 +135,7 @@ function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,3}, param
 end
 
 # (m₁ × m₂ × ch_in × b) -> (m₁ × m₂ × ch_out × b)
-function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,4}, params::NamedTuple)
+function compute_tensor_contractions(ω_truncated::AbstractArray{<:Number,4}, params::NamedTuple)
     core = params.core          # (r_out × r_in × r₁ × r₂)
     U_in = params.U_in          # (ch_in × r_in)
     U_out = params.U_out        # (ch_out × r_out)
@@ -172,7 +172,7 @@ function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,4}, param
 end
 
 # (m₁ × m₂ × m₃ × ch_in × b) -> (m₁ × m₂ × m₃ × ch_out × b)
-function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,5}, params::NamedTuple)
+function compute_tensor_contractions(ω_truncated::AbstractArray{<:Number,5}, params::NamedTuple)
     core = params.core              # (r_out × r_in × r₁ × r₂ × r₃)
     U_in = params.U_in              # (ch_in × r_in)
     U_out = params.U_out            # (ch_out × r_out)
