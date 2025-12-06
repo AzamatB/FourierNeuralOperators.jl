@@ -5,9 +5,10 @@ module TensorizedFourierNeuralOperators
 # See arxiv.org/abs/2310.00120 for details.
 
 using Lux
-using NNlib: batched_mul
-using NeuralOperators: FourierTransform, inverse, pad_zeros, transform, truncate_modes
 using Random
+using NNlib: batched_mul
+using NeuralOperators: FourierTransform, expand_pad_dims, inverse, pad_zeros, transform,
+                       truncate_modes
 
 # Tucker–Tensorized Spectral Convolution Layer
 struct TuckerSpectralConv{D} <: Lux.AbstractLuxLayer
@@ -28,7 +29,7 @@ function TuckerSpectralConv(
     shift::Bool=false
 ) where {D}
     (channels_in, channels_out) = channels
-    fourier_transform = FourierTransform{Float32}(modes, shift)
+    fourier_transform = FourierTransform{ComplexF32}(modes, shift)
     return TuckerSpectralConv{D}(
         channels_in, channels_out, rank_in, rank_out, rank_modes, fourier_transform
     )
@@ -106,10 +107,10 @@ end
 
 # (m₁ × ch_in × b) -> (m₁ × ch_out × b)
 function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,3}, params::NamedTuple)
-    core = params.core         # (r_out × r_in × r₁)
-    U_in = params.U_in         # (ch_in × r_in)
-    U_out = params.U_out       # (ch_out × r_out)
-    U_modes = params.U_modes   # (r₁ × m₁)
+    core = params.core          # (r_out × r_in × r₁)
+    U_in = params.U_in          # (ch_in × r_in)
+    U_out = params.U_out        # (ch_out × r_out)
+    U₁ = only(params.U_modes)   # (r₁ × m₁)
 
     (m₁, ch_in, b) = size(ω_truncated)
     (r_out, r_in, r₁) = size(core)
@@ -122,26 +123,24 @@ function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,3}, param
     S = reshape(S_flat₁, r_out, r_in, m₁)               # (r_out × r_in × m₁)
 
     # project input: contract ch_in -> r_in (batching over batches)
-    U_in_fat = reshape(U_in, ch_in, r_in, 1)            # (ch_in × r_in × 1)
-    ω_proj_flat = batched_mul(ω_truncated, U_in_fat)    # (m₁ × r_in × b)
+    ω_proj_flat = batched_mul(ω_truncated, U_in)        # (m₁ × r_in × b)
 
     # spectral convolution: contract r_in -> r_out (batching over m₁)
     ω_proj_perm = permutedims(ω_proj_flat, (2, 3, 1))   # (r_in × b × m₁)
     y_flat = batched_mul(S, ω_proj_perm)                # (r_out × b × m₁)
 
     # project output: contract r_out -> ch_out (batching over m₁)
-    U_out_fat = reshape(U_out, ch_out, r_out, 1)        # (ch_out × r_out × 1)
-    output_flat = batched_mul(U_out_fat, y_flat)        # (ch_out × b × m₁)
+    output_flat = batched_mul(U_out, y_flat)            # (ch_out × b × m₁)
     output = permutedims(output_flat, (3, 1, 2))        # (m₁ × ch_out × b)
     return output
 end
 
 # (m₁ × m₂ × ch_in × b) -> (m₁ × m₂ × ch_out × b)
 function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,4}, params::NamedTuple)
-    core = params.core         # (r_out × r_in × r₁ × r₂)
-    U_in = params.U_in         # (ch_in × r_in)
-    U_out = params.U_out       # (ch_out × r_out)
-    U_modes = params.U_modes   # (rₖ × mₖ)
+    core = params.core          # (r_out × r_in × r₁ × r₂)
+    U_in = params.U_in          # (ch_in × r_in)
+    U_out = params.U_out        # (ch_out × r_out)
+    (U₁, U₂) = params.U_modes   # (rₖ × mₖ)
 
     (m₁, m₂, ch_in, b) = size(ω_truncated)
     (r_out, r_in, r₁, r₂) = size(core)
@@ -149,20 +148,17 @@ function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,4}, param
 
     # contract r₁ -> m₁ (batching over r₂)
     core_flat₁ = reshape(core, r_out * r_in, r₁, r₂)    # (r_out⋅r_in × r₁ × r₂)
-    U₁ = reshape(U_modes[1], r₁, m₁, 1)                 # (r₁ × m₁ × 1)
     S_flat₁ = batched_mul(core_flat₁, U₁)               # (r_out⋅r_in × m₁ × r₂)
     S₁ = reshape(S_flat₁, r_out, r_in, m₁, r₂)          # (r_out × r_in × m₁ × r₂)
 
     # contract r₂ -> m₂
     core_flat₂ = reshape(S₁, r_out * r_in * m₁, r₂)     # (r_out⋅r_in⋅m₁ × r₂)
-    U₂ = U_modes[2]                                     # (r₂ × m₂)
     S_flat₂ = core_flat₂ * U₂                           # (r_out⋅r_in⋅m₁ × m₂)
     S = reshape(S_flat₂, r_out, r_in, m₁, m₂)           # (r_out × r_in × m₁ × m₂)
 
     # project input: contract ch_in -> r_in (batching over batches)
     ω_flat = reshape(ω_truncated, m₁ * m₂, ch_in, b)    # (m₁⋅m₂ × ch_in × b)
-    U_in_fat = reshape(U_in, ch_in, r_in, 1)            # (ch_in × r_in × 1)
-    ω_proj_flat = batched_mul(ω_flat, U_in_fat)         # (m₁⋅m₂ × r_in × b)
+    ω_proj_flat = batched_mul(ω_flat, U_in)             # (m₁⋅m₂ × r_in × b)
 
     # spectral convolution: contract r_in -> r_out (batching over m₁ × m₂)
     S_flat = reshape(S, r_out, r_in, m₁ * m₂)           # (r_out × r_in × m₁⋅m₂)
@@ -170,8 +166,7 @@ function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,4}, param
     y_flat = batched_mul(S_flat, ω_proj_perm)           # (r_out × b × m₁⋅m₂)
 
     # project output: contract r_out -> ch_out (batching over m₁ × m₂)
-    U_out_fat = reshape(U_out, ch_out, r_out, 1)        # (ch_out × r_out × 1)
-    output_flat = batched_mul(U_out_fat, y_flat)        # (ch_out × b × m₁⋅m₂)
+    output_flat = batched_mul(U_out, y_flat)            # (ch_out × b × m₁⋅m₂)
     output_perm = permutedims(output_flat, (3, 1, 2))   # (m₁⋅m₂ × ch_out × b)
     output = reshape(output_perm, m₁, m₂, ch_out, b)    # (m₁ × m₂ × ch_out × b)
     return output
@@ -179,10 +174,10 @@ end
 
 # (m₁ × m₂ × m₃ × ch_in × b) -> (m₁ × m₂ × m₃ × ch_out × b)
 function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,5}, params::NamedTuple)
-    core = params.core         # (r_out × r_in × r₁ × r₂ × r₃)
-    U_in = params.U_in         # (ch_in × r_in)
-    U_out = params.U_out       # (ch_out × r_out)
-    U_modes = params.U_modes   # (rₖ × mₖ)
+    core = params.core              # (r_out × r_in × r₁ × r₂ × r₃)
+    U_in = params.U_in              # (ch_in × r_in)
+    U_out = params.U_out            # (ch_out × r_out)
+    (U₁, U₂, U₃) = params.U_modes   # (rₖ × mₖ)
 
     (m₁, m₂, m₃, ch_in, b) = size(ω_truncated)
     (r_out, r_in, r₁, r₂, r₃) = size(core)
@@ -190,26 +185,22 @@ function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,5}, param
 
     # contract r₁ -> m₁ (batching over r₂ × r₃)
     core_flat₁ = reshape(core, r_out * r_in, r₁, r₂ * r₃)   # (r_out⋅r_in × r₁ × r₂⋅r₃)
-    U₁ = reshape(U_modes[1], r₁, m₁, 1)                     # (r₁ × m₁ × 1)
     S_flat₁ = batched_mul(core_flat₁, U₁)                   # (r_out⋅r_in × m₁ × r₂⋅r₃)
     S₁ = reshape(S_flat₁, r_out, r_in, m₁, r₂, r₃)          # (r_out × r_in × m₁ × r₂ × r₃)
 
     # contract r₂ -> m₂ (batching over r₃)
     core_flat₂ = reshape(S₁, r_out * r_in * m₁, r₂, r₃)     # (r_out⋅r_in⋅m₁ × r₂ × r₃)
-    U₂ = reshape(U_modes[2], r₂, m₂, 1)                     # (r₂ × m₂ × 1)
     S_flat₂ = batched_mul(core_flat₂, U₂)                   # (r_out⋅r_in⋅m₁ × m₂ × r₃)
     S₂ = reshape(S_flat₂, r_out, r_in, m₁, m₂, r₃)          # (r_out × r_in × m₁ × m₂ × r₃)
 
     # contract r₃ -> m₃
     core_flat₃ = reshape(S₂, r_out * r_in * m₁ * m₂, r₃)    # (r_out⋅r_in⋅m₁⋅m₂ × r₃)
-    U₃ = U_modes[3]                                         # (r₃ × m₃)
     S_flat₃ = core_flat₃ * U₃                               # (r_out⋅r_in⋅m₁⋅m₂ × m₃)
     S = reshape(S_flat₃, r_out, r_in, m₁, m₂, m₃)           # (r_out × r_in × m₁ × m₂ × m₃)
 
     # project input: contract ch_in -> r_in (batching over batches)
     ω_flat = reshape(ω_truncated, m₁ * m₂ * m₃, ch_in, b)   # (m₁⋅m₂⋅m₃ × ch_in × b)
-    U_in_fat = reshape(U_in, ch_in, r_in, 1)                # (ch_in × r_in × 1)
-    ω_proj_flat = batched_mul(ω_flat, U_in_fat)             # (m₁⋅m₂⋅m₃ × r_in × b)
+    ω_proj_flat = batched_mul(ω_flat, U_in)                 # (m₁⋅m₂⋅m₃ × r_in × b)
 
     # spectral convolution: contract r_in -> r_out (batching over m₁ × m₂ × m₃)
     S_flat = reshape(S, r_out, r_in, m₁ * m₂ * m₃)          # (r_out × r_in × m₁⋅m₂⋅m₃)
@@ -217,8 +208,7 @@ function compute_tensor_contractions(ω_truncated::DenseArray{<:Number,5}, param
     y_flat = batched_mul(S_flat, ω_proj_perm)               # (r_out × b × m₁⋅m₂⋅m₃)
 
     # project output: contract r_out -> ch_out (batching over m₁ × m₂ × m₃)
-    U_out_fat = reshape(U_out, ch_out, r_out, 1)            # (ch_out × r_out × 1)
-    output_flat = batched_mul(U_out_fat, y_flat)            # (ch_out × b × m₁⋅m₂⋅m₃)
+    output_flat = batched_mul(U_out, y_flat)                # (ch_out × b × m₁⋅m₂⋅m₃)
     output_perm = permutedims(output_flat, (3, 1, 2))       # (m₁⋅m₂⋅m₃ × ch_out × b)
     output = reshape(output_perm, m₁, m₂, m₃, ch_out, b)    # (m₁ × m₂ × m₃ × ch_out × b)
     return output
