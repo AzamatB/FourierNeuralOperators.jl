@@ -6,9 +6,8 @@ module TensorizedFourierNeuralOperators
 
 using Lux
 using Random
-using NNlib: batched_mul
-using NeuralOperators: FourierTransform, expand_pad_dims, inverse, pad_zeros, transform,
-                       truncate_modes
+using NNlib: batched_mul, pad_constant
+using NeuralOperators: FourierTransform, expand_pad_dims, inverse, transform, truncate_modes
 
 # Tucker–Tensorized Spectral Convolution Layer
 struct TuckerSpectralConv{D} <: Lux.AbstractLuxLayer
@@ -45,7 +44,7 @@ function Lux.initialparameters(rng::AbstractRNG, layer::TuckerSpectralConv{D}) w
     rank_modes = layer.rank_modes
     modes = fourier_transform.modes
     # simple Glorot-style scaling
-    scale = sqrt(2.0 / (channels_in + channels_out))
+    scale = sqrt(2.0f0 / (channels_in + channels_out))
 
     # core tensor ordering: (rank_out, rank_in, rank_modes...)
     core = scale .* glorot_uniform(rng, T, rank_out, rank_in, rank_modes...)
