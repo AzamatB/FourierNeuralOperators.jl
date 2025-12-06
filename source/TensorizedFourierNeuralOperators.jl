@@ -38,7 +38,6 @@ end
 function Lux.initialparameters(rng::AbstractRNG, layer::TuckerSpectralConv{D}) where {D}
     fourier_transform = layer.fourier_transform
     T = eltype(fourier_transform)
-    R = real(T)
     C = complex(T)
     channels_in = layer.channels_in
     channels_out = layer.channels_out
@@ -54,7 +53,7 @@ function Lux.initialparameters(rng::AbstractRNG, layer::TuckerSpectralConv{D}) w
     U_in = glorot_uniform(rng, C, channels_in, rank_in)     # (ch_in × r_in)
     U_out = glorot_uniform(rng, C, channels_out, rank_out)   # (ch_out × r_out)
     # U_modes: (rank_dim × mode_dim)
-    U_modes = ntuple(i -> glorot_uniform(rng, R, rank_modes[i], modes[i]), Val(D))
+    U_modes = ntuple(i -> glorot_uniform(rng, C, rank_modes[i], modes[i]), Val(D))
 
     params = (; core, U_modes, U_in, U_out)
     return params
