@@ -84,27 +84,27 @@ function Lux.statelength(layer::FactorizedSpectralConv)
 end
 
 # forward pass definition
-# (spatial_dims..., channels_in, batches) -> (spatial_dims..., channels_out, batches)
+# (spatial_dims..., channels_in, batch) -> (spatial_dims..., channels_out, batch)
 function (conv::FactorizedSpectralConv{D})(
     x::AbstractArray, params::NamedTuple, states::NamedTuple
 ) where {D}
-    # x: (spatial_dims..., channels_in, batches)
+    # x: (spatial_dims..., channels_in, batch)
     fourier_transform = conv.fourier_transform
     # apply discrete Fourier transform: spatial_dims -> freq_dims
-    ω = transform(fourier_transform, x)                    # (freq_dims..., channels_in, batches)
+    ω = transform(fourier_transform, x)                    # (freq_dims..., channels_in, batch)
     # truncate higher frequencies: freq_dims -> modes
-    ω_truncated = truncate_modes(fourier_transform, ω)     # (modes..., channels_in, batches)
+    ω_truncated = truncate_modes(fourier_transform, ω)     # (modes..., channels_in, batch)
 
     # perform tensor contractions in truncated frequency space: channels_in -> channels_out
-    y = compute_tensor_contractions(ω_truncated, params)   # (modes..., channels_out, batches)
+    y = compute_tensor_contractions(ω_truncated, params)   # (modes..., channels_out, batch)
 
     # pad truncated frequencies with zeros to restore original frequency dimensions: modes -> freq_dims
     pad_dims = size(ω)[1:D] .- size(y)[1:D]
     pad_tuple = expand_pad_dims(pad_dims)
     dims = ntuple(identity, Val(D))
-    y_padded = pad_constant(y, pad_tuple, false; dims)     # (freq_dims..., channels_out, batches)
+    y_padded = pad_constant(y, pad_tuple, false; dims)     # (freq_dims..., channels_out, batch)
     # apply inverse discrete Fourier transform: freq_dims -> spatial_dims
-    output = inverse(fourier_transform, y_padded, x)       # (spatial_dims..., channels_out, batches)
+    output = inverse(fourier_transform, y_padded, x)       # (spatial_dims..., channels_out, batch)
     return (output, states)
 end
 
@@ -123,7 +123,7 @@ function compute_tensor_contractions(x::AbstractArray{<:Number,3}, params::Named
     S_flat₁ = core_flat₁ * U₁                      # (r_out⋅r_in × m₁)
     S = reshape(S_flat₁, r_out, r_in, m₁)          # (r_out × r_in × m₁)
 
-    # project input: contract ch_in -> r_in (batching over batches)
+    # project input: contract ch_in -> r_in (batching over batch)
     y = batched_mul(x, U_in)                       # (m₁ × r_in × b)
 
     # spectral convolution: contract r_in -> r_out (batching over m₁)
@@ -157,7 +157,7 @@ function compute_tensor_contractions(x::AbstractArray{<:Number,4}, params::Named
     S_flat₂ = core_flat₂ * U₂                           # (r_out⋅r_in⋅m₁ × m₂)
     S = reshape(S_flat₂, r_out, r_in, m₁, m₂)           # (r_out × r_in × m₁ × m₂)
 
-    # project input: contract ch_in -> r_in (batching over batches)
+    # project input: contract ch_in -> r_in (batching over batch)
     x_flat = reshape(x, m₁ * m₂, ch_in, b)              # (m₁⋅m₂ × ch_in × b)
     y = batched_mul(x_flat, U_in)                       # (m₁⋅m₂ × r_in × b)
 
@@ -199,7 +199,7 @@ function compute_tensor_contractions(x::AbstractArray{<:Number,5}, params::Named
     S_flat₃ = core_flat₃ * U₃                               # (r_out⋅r_in⋅m₁⋅m₂ × m₃)
     S = reshape(S_flat₃, r_out, r_in, m₁, m₂, m₃)           # (r_out × r_in × m₁ × m₂ × m₃)
 
-    # project input: contract ch_in -> r_in (batching over batches)
+    # project input: contract ch_in -> r_in (batching over batch)
     x_flat = reshape(x, m₁ * m₂ * m₃, ch_in, b)             # (m₁⋅m₂⋅m₃ × ch_in × b)
     y = batched_mul(x_flat, U_in)                           # (m₁⋅m₂⋅m₃ × r_in × b)
 
