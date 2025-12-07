@@ -123,7 +123,7 @@ function compute_tensor_contractions(
     (ch_out, r_out) = size(U_out)
     dims = size(x)
     b = dims[end]
-    modes = NTuple{N - 2,Int}(ntuple(i -> dims[i], Val(N - 2)))
+    modes = NTuple{N-2,Int}(ntuple(i -> dims[i], Val(N - 2)))
 
     # project input: contract ch_in -> r_in (batching over batch)
     x_flat = reshape(x, :, ch_in, b)                     # (prod(modes), ch_in, b)
@@ -148,8 +148,8 @@ function (::ModeKProduct{K})(
     tensor::AbstractArray{N,D}, matrix::AbstractMatrix{N}
 ) where {K,N<:Number,D}
     dims = size(tensor)
-    dims_before = NTuple{K-1, Int}(ntuple(i -> dims[i], Val(K-1)))
-    dims_after  = NTuple{D-K, Int}(ntuple(i -> dims[K + i], Val(D-K)))
+    dims_before = NTuple{K-1,Int}(ntuple(i -> dims[i], Val(K-1)))
+    dims_after  = NTuple{D-K,Int}(ntuple(i -> dims[K + i], Val(D-K)))
     (dim_in, dim_out) = size(matrix)
 
     tensor_flat = reshape(tensor, prod(dims_before), dim_in, prod(dims_after))
