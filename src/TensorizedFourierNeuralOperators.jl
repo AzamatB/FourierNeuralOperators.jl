@@ -95,8 +95,12 @@ function (conv::FactorizedSpectralConv{D})(
     # truncate higher frequencies: freq_dims -> modes
     ω_truncated = truncate_modes(fourier_transform, ω)     # (modes..., channels_in, batch)
 
-    # perform tensor contractions in truncated frequency space: channels_in -> channels_out
-    y = compute_tensor_contractions(ω_truncated, params)   # (modes..., channels_out, batch)
+    # (r_out, r_in, rank_modes...) -> (r_out, r_in, modes...)
+    S = expand_tucker_core_tensor(params.core, params.U_modes)
+
+    # perform tensor contractions in truncated frequency space:
+    # (modes..., ch_in, b) -> (modes..., ch_out, b)
+    y = compute_tensor_contractions(ω_truncated, params.U_in, params.U_out, S)
 
     # pad truncated frequencies with zeros to restore original frequency dimensions: modes -> freq_dims
     pad_dims = size(ω)[1:D] .- size(y)[1:D]
@@ -108,81 +112,80 @@ function (conv::FactorizedSpectralConv{D})(
     return (output, states)
 end
 
-# 1D case: (m₁ × ch_in × b) -> (m₁ × ch_out × b)
-function compute_tensor_contractions(x::AbstractArray{<:Number,3}, params::NamedTuple)
-    core = params.core          # (r_out × r_in × r₁)
-    U_in = params.U_in          # (ch_in × r_in)
-    U_out = params.U_out        # (ch_out × r_out)
-    U₁ = only(params.U_modes)   # (r₁ × m₁)
+# (modes..., ch_in, b) -> (modes..., ch_out, b)
+function compute_tensor_contractions(
+    x::AbstractArray{<:Number,N},       # (modes..., ch_in, b)
+    U_in::DenseMatrix{C},               # (ch_in, r_in)
+    U_out::DenseMatrix{C},              # (ch_out, r_out)
+    S::AbstractArray{C,N}               # (r_out, r_in, modes...)
+) where {C<:Complex,N}
+    shape_x = size(x)
+    modes = shape_x[1:end-2]
+    b = shape_x[end]
+    (ch_in, r_in) = size(U_in)
+    (ch_out, r_out) = size(U_out)
 
-    (m₁, ch_in, b) = size(x)
-    (r_out, r_in, r₁) = size(core)
+    # project input: contract ch_in -> r_in (batching over batch)
+    x_flat = reshape(x, :, ch_in, b)                     # (prod(modes), ch_in, b)
+    y = batched_mul(x_flat, U_in)                        # (prod(modes), r_in, b)
+
+    # spectral convolution: contract r_in -> r_out (batching over modes)
+    S_flat = reshape(S, r_out, r_in, :)                  # (r_out, r_in, prod(modes))
+    y_perm = permutedims(y, (2, 3, 1))                   # (r_in, b, prod(modes))
+    z = batched_mul(S_flat, y_perm)                      # (r_out, b, prod(modes))
+
+    # project output: contract r_out -> ch_out (batching over modes)
+    output_flat = batched_mul(U_out, z)                  # (ch_out, b, prod(modes))
+    output_perm = permutedims(output_flat, (3, 1, 2))    # (prod(modes), ch_out, b)
+    output = reshape(output_perm, modes..., ch_out, b)   # (modes..., ch_out, b)
+    return output
+end
+
+# 1D case: (r_out × r_in × r₁) -> (r_out × r_in × m₁)
+function expand_tucker_core_tensor(
+    core::AbstractArray{C,3}, U_modes::NTuple{1,DenseMatrix{C}}
+) where {C<:Complex}
+    U₁ = only(U_modes)
+    (r_out, r_in, r₁) = size(core)   # (r_out × r_in × r₁)
+    (r₁, m₁) = size(U₁)              # (r₁ × m₁)
 
     # contract r₁ -> m₁
     core_flat₁ = reshape(core, r_out * r_in, r₁)   # (r_out⋅r_in × r₁)
     S_flat₁ = core_flat₁ * U₁                      # (r_out⋅r_in × m₁)
     S = reshape(S_flat₁, r_out, r_in, m₁)          # (r_out × r_in × m₁)
-
-    # project input: contract ch_in -> r_in (batching over batch)
-    y = batched_mul(x, U_in)                       # (m₁ × r_in × b)
-
-    # spectral convolution: contract r_in -> r_out (batching over m₁)
-    y_perm = permutedims(y, (2, 3, 1))             # (r_in × b × m₁)
-    z = batched_mul(S, y_perm)                     # (r_out × b × m₁)
-
-    # project output: contract r_out -> ch_out (batching over m₁)
-    output_flat = batched_mul(U_out, z)            # (ch_out × b × m₁)
-    output = permutedims(output_flat, (3, 1, 2))   # (m₁ × ch_out × b)
-    return output
+    return S
 end
 
-# 2D case: (m₁ × m₂ × ch_in × b) -> (m₁ × m₂ × ch_out × b)
-function compute_tensor_contractions(x::AbstractArray{<:Number,4}, params::NamedTuple)
-    core = params.core          # (r_out × r_in × r₁ × r₂)
-    U_in = params.U_in          # (ch_in × r_in)
-    U_out = params.U_out        # (ch_out × r_out)
-    (U₁, U₂) = params.U_modes   # (rₖ × mₖ)
-
-    (m₁, m₂, ch_in, b) = size(x)
-    (r_out, r_in, r₁, r₂) = size(core)
-    ch_out = size(U_out, 1)
+# 2D case: (r_out × r_in × r₁ × r₂) -> (r_out × r_in × m₁ × m₂)
+function expand_tucker_core_tensor(
+    core::AbstractArray{C,4}, U_modes::NTuple{2,DenseMatrix{C}}
+) where {C<:Complex}
+    (U₁, U₂) = U_modes   # (rₖ × mₖ)
+    (r_out, r_in, r₁, r₂) = size(core)   # (r_out × r_in × r₁ × r₂)
+    (r₁, m₁) = size(U₁)                  # (r₁ × m₁)
+    (r₂, m₂) = size(U₂)                  # (r₂ × m₂)
 
     # contract r₁ -> m₁ (batching over r₂)
-    core_flat₁ = reshape(core, r_out * r_in, r₁, r₂)    # (r_out⋅r_in × r₁ × r₂)
-    S_flat₁ = batched_mul(core_flat₁, U₁)               # (r_out⋅r_in × m₁ × r₂)
-    S₁ = reshape(S_flat₁, r_out, r_in, m₁, r₂)          # (r_out × r_in × m₁ × r₂)
+    core_flat₁ = reshape(core, r_out * r_in, r₁, r₂)   # (r_out⋅r_in × r₁ × r₂)
+    S_flat₁ = batched_mul(core_flat₁, U₁)              # (r_out⋅r_in × m₁ × r₂)
+    S₁ = reshape(S_flat₁, r_out, r_in, m₁, r₂)         # (r_out × r_in × m₁ × r₂)
 
     # contract r₂ -> m₂
-    core_flat₂ = reshape(S₁, r_out * r_in * m₁, r₂)     # (r_out⋅r_in⋅m₁ × r₂)
-    S_flat₂ = core_flat₂ * U₂                           # (r_out⋅r_in⋅m₁ × m₂)
-    S = reshape(S_flat₂, r_out, r_in, m₁, m₂)           # (r_out × r_in × m₁ × m₂)
-
-    # project input: contract ch_in -> r_in (batching over batch)
-    x_flat = reshape(x, :, ch_in, b)                    # (m₁⋅m₂ × ch_in × b)
-    y = batched_mul(x_flat, U_in)                       # (m₁⋅m₂ × r_in × b)
-
-    # spectral convolution: contract r_in -> r_out (batching over m₁ × m₂)
-    S_flat = reshape(S, r_out, r_in, :)                 # (r_out × r_in × m₁⋅m₂)
-    y_perm = permutedims(y, (2, 3, 1))                  # (r_in × b × m₁⋅m₂)
-    z = batched_mul(S_flat, y_perm)                     # (r_out × b × m₁⋅m₂)
-
-    # project output: contract r_out -> ch_out (batching over m₁ × m₂)
-    output_flat = batched_mul(U_out, z)                 # (ch_out × b × m₁⋅m₂)
-    output_perm = permutedims(output_flat, (3, 1, 2))   # (m₁⋅m₂ × ch_out × b)
-    output = reshape(output_perm, m₁, m₂, ch_out, b)    # (m₁ × m₂ × ch_out × b)
-    return output
+    core_flat₂ = reshape(S₁, r_out * r_in * m₁, r₂)    # (r_out⋅r_in⋅m₁ × r₂)
+    S_flat₂ = core_flat₂ * U₂                          # (r_out⋅r_in⋅m₁ × m₂)
+    S = reshape(S_flat₂, r_out, r_in, m₁, m₂)          # (r_out × r_in × m₁ × m₂)
+    return S
 end
 
-# 3D case: (m₁ × m₂ × m₃ × ch_in × b) -> (m₁ × m₂ × m₃ × ch_out × b)
-function compute_tensor_contractions(x::AbstractArray{<:Number,5}, params::NamedTuple)
-    core = params.core              # (r_out × r_in × r₁ × r₂ × r₃)
-    U_in = params.U_in              # (ch_in × r_in)
-    U_out = params.U_out            # (ch_out × r_out)
-    (U₁, U₂, U₃) = params.U_modes   # (rₖ × mₖ)
-
-    (m₁, m₂, m₃, ch_in, b) = size(x)
-    (r_out, r_in, r₁, r₂, r₃) = size(core)
-    ch_out = size(U_out, 1)
+# 3D case: (r_out × r_in × r₁ × r₂ × r₃) -> (r_out × r_in × m₁ × m₂ × m₃)
+function expand_tucker_core_tensor(
+    core::AbstractArray{C,5}, U_modes::NTuple{3,DenseMatrix{C}}
+) where {C<:Complex}
+    (U₁, U₂, U₃) = U_modes                   # (rₖ × mₖ)
+    (r_out, r_in, r₁, r₂, r₃) = size(core)   # (r_out × r_in × r₁ × r₂ × r₃)
+    (r₁, m₁) = size(U₁)                      # (r₁ × m₁)
+    (r₂, m₂) = size(U₂)                      # (r₂ × m₂)
+    (r₃, m₃) = size(U₃)                      # (r₃ × m₃)
 
     # contract r₁ -> m₁ (batching over r₂ × r₃)
     core_flat₁ = reshape(core, r_out * r_in, r₁, r₂ * r₃)   # (r_out⋅r_in × r₁ × r₂⋅r₃)
@@ -198,41 +201,27 @@ function compute_tensor_contractions(x::AbstractArray{<:Number,5}, params::Named
     core_flat₃ = reshape(S₂, r_out * r_in * m₁ * m₂, r₃)    # (r_out⋅r_in⋅m₁⋅m₂ × r₃)
     S_flat₃ = core_flat₃ * U₃                               # (r_out⋅r_in⋅m₁⋅m₂ × m₃)
     S = reshape(S_flat₃, r_out, r_in, m₁, m₂, m₃)           # (r_out × r_in × m₁ × m₂ × m₃)
-
-    # project input: contract ch_in -> r_in (batching over batch)
-    x_flat = reshape(x, :, ch_in, b)                        # (m₁⋅m₂⋅m₃ × ch_in × b)
-    y = batched_mul(x_flat, U_in)                           # (m₁⋅m₂⋅m₃ × r_in × b)
-
-    # spectral convolution: contract r_in -> r_out (batching over m₁ × m₂ × m₃)
-    S_flat = reshape(S, r_out, r_in, :)                     # (r_out × r_in × m₁⋅m₂⋅m₃)
-    y_perm = permutedims(y, (2, 3, 1))                      # (r_in × b × m₁⋅m₂⋅m₃)
-    z = batched_mul(S_flat, y_perm)                         # (r_out × b × m₁⋅m₂⋅m₃)
-
-    # project output: contract r_out -> ch_out (batching over m₁ × m₂ × m₃)
-    output_flat = batched_mul(U_out, z)                     # (ch_out × b × m₁⋅m₂⋅m₃)
-    output_perm = permutedims(output_flat, (3, 1, 2))       # (m₁⋅m₂⋅m₃ × ch_out × b)
-    output = reshape(output_perm, m₁, m₂, m₃, ch_out, b)    # (m₁ × m₂ × m₃ × ch_out × b)
-    return output
+    return S
 end
 
-# expand Tucker core tensor into full tensor via mode products with factor matrices
-function expand_tucker_core_tensor(
-    core::DenseArray{C}, U_modes::NTuple{D,DenseMatrix{C}}
-) where {C<:Complex,D}
-    modes = size.(U_modes, 2)
-    # core: (r_out, r_in, dims...)
-    for d in 1:D
-        # k-mode tensor product via matricization + batched multiplication
-        k = d + 2
-        dims = size(core)
-        ranks_before = dims[1:(k - 1)]
-        ranks_after = dims[(k + 1):end]
+# # expand Tucker core tensor into full tensor via mode products with factor matrices
+# function expand_tucker_core_tensor(
+#     core::DenseArray{C}, U_modes::NTuple{D,DenseMatrix{C}}
+# ) where {C<:Complex,D}
+#     modes = size.(U_modes, 2)
+#     # core: (r_out, r_in, dims...)
+#     for d in 1:D
+#         # k-mode tensor product via matricization + batched multiplication
+#         k = d + 2
+#         dims = size(core)
+#         ranks_before = dims[1:(k - 1)]
+#         ranks_after = dims[(k + 1):end]
 
-        core_flat = reshape(core, prod(ranks_before), dims[k], prod(ranks_after))
-        S_flat = batched_mul(core_flat, U_modes[d])
-        core = reshape(S_flat, ranks_before..., modes[d], ranks_after...)
-    end
-    return core
-end
+#         core_flat = reshape(core, prod(ranks_before), dims[k], prod(ranks_after))
+#         S_flat = batched_mul(core_flat, U_modes[d])
+#         core = reshape(S_flat, ranks_before..., modes[d], ranks_after...)
+#     end
+#     return core
+# end
 
 end # module TensorizedFourierNeuralOperators
