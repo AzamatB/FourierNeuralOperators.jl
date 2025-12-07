@@ -37,15 +37,15 @@ function FactorizedSpectralConv(
     )
 end
 
-function Lux.initialparameters(rng::AbstractRNG, layer::FactorizedSpectralConv{D}) where {D}
-    fourier_transform = layer.fourier_transform
+function Lux.initialparameters(rng::AbstractRNG, conv::FactorizedSpectralConv{D}) where {D}
+    fourier_transform = conv.fourier_transform
     T = eltype(fourier_transform)
     C = complex(T)
-    channels_in = layer.channels_in
-    channels_out = layer.channels_out
-    rank_in = layer.rank_in
-    rank_out = layer.rank_out
-    rank_modes = layer.rank_modes
+    channels_in = conv.channels_in
+    channels_out = conv.channels_out
+    rank_in = conv.rank_in
+    rank_out = conv.rank_out
+    rank_modes = conv.rank_modes
     modes = fourier_transform.modes
     # simple Glorot-style scaling
     scale = sqrt(2.0f0 / (channels_in + channels_out))
@@ -61,25 +61,25 @@ function Lux.initialparameters(rng::AbstractRNG, layer::FactorizedSpectralConv{D
     return params
 end
 
-function Lux.initialstates(rng::AbstractRNG, layer::FactorizedSpectralConv)
+function Lux.initialstates(rng::AbstractRNG, conv::FactorizedSpectralConv)
     return (;) # stateless
 end
 
-function Lux.parameterlength(layer::FactorizedSpectralConv{D}) where {D}
-    rank_in = layer.rank_in
-    rank_out = layer.rank_out
-    rank_modes = layer.rank_modes
-    modes = layer.fourier_transform.modes
+function Lux.parameterlength(conv::FactorizedSpectralConv{D}) where {D}
+    rank_in = conv.rank_in
+    rank_out = conv.rank_out
+    rank_modes = conv.rank_modes
+    modes = conv.fourier_transform.modes
 
     core_len = rank_out * rank_in * prod(rank_modes)
-    U_in_len = layer.channels_in * rank_in
-    U_out_len = layer.channels_out * rank_out
+    U_in_len = conv.channels_in * rank_in
+    U_out_len = conv.channels_out * rank_out
     U_modes_len = sum(rank_modes[d] * modes[d] for d in 1:D)
     len = core_len + U_in_len + U_out_len + U_modes_len
     return len
 end
 
-function Lux.statelength(layer::FactorizedSpectralConv)
+function Lux.statelength(conv::FactorizedSpectralConv)
     return 0
 end
 
