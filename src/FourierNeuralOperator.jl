@@ -55,11 +55,13 @@ end
 function (layer::FourierNeuralOperator)(
     x::AbstractArray, params::NamedTuple, states::NamedTuple
 )
+    state = (;)
     # lift
-    (x_lift, _) = layer.lift(x, params.lift, states)
+    (x_lift, _) = layer.lift(x, params.lift, state)
     # apply FNO blocks
-    (x_fno, _) = layer.fno_blocks(x_lift, params.fno_blocks, states)
+    (x_fno, states_fno_blocks) = layer.fno_blocks(x_lift, params.fno_blocks, states.fno_blocks)
     # project
-    (output, _) = layer.project(x_fno, params.project, states)
-    return (output, states)
+    (output, _) = layer.project(x_fno, params.project, state)
+    states_out = (; fno_blocks=states_fno_blocks)
+    return (output, states_out)
 end
