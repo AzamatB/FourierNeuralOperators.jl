@@ -200,10 +200,10 @@ end
 
 # (modes..., ch_in, b) -> (modes..., ch_out, b)
 function compute_tensor_contractions(
-    x::AbstractArray{<:Number,N},       # (modes..., ch_in, b)
-    U_in::DenseMatrix{C},               # (ch_in, r_in)
-    U_out::DenseMatrix{C},              # (ch_out, r_out)
-    S::AbstractArray{C,N}               # (r_out, r_in, modes...)
+    x::AbstractArray{<:Number,N},                             # (modes..., ch_in, b)
+    U_in::DenseMatrix{C},                                     # (ch_in, r_in)
+    U_out::DenseMatrix{C},                                    # (ch_out, r_out)
+    S::AbstractArray{C,N}                                     # (r_out, r_in, modes...)
 ) where {C<:Complex,N}
     (ch_in, r_in) = size(U_in)
     (ch_out, r_out) = size(U_out)
@@ -212,19 +212,54 @@ function compute_tensor_contractions(
     modes = NTuple{N-2,Int}(ntuple(i -> dims[i], Val(N - 2)))
 
     # project input: contract ch_in -> r_in (batching over batch)
-    x_flat = reshape(x, :, ch_in, b)                     # (prod(modes), ch_in, b)
-    y = batched_mul(x_flat, U_in)                        # (prod(modes), r_in, b)
+    x_flat = reshape(x, :, ch_in, b)                          # (prod(modes), ch_in, b)
+    y_flat = batched_mul(x_flat, U_in)                        # (prod(modes), r_in, b)
+    y = reshape(y_flat, modes..., r_in, b)                    # (modes..., r_in, b)
+    y_perm = permute_mode_dims(y)                             # (r_in, b, modes...)
+    y_perm_flat = reshape(y_perm, r_in, b, :)                 # (r_in, b, prod(modes))
 
     # spectral convolution: contract r_in -> r_out (batching over modes)
-    S_flat = reshape(S, r_out, r_in, :)                  # (r_out, r_in, prod(modes))
-    y_perm = permutedims(y, (2, 3, 1))                   # (r_in, b, prod(modes))
-    z = batched_mul(S_flat, y_perm)                      # (r_out, b, prod(modes))
+    S_flat = reshape(S, r_out, r_in, :)                       # (r_out, r_in, prod(modes))
+    z = batched_mul(S_flat, y_perm_flat)                      # (r_out, b, prod(modes))
 
     # project output: contract r_out -> ch_out (batching over modes)
-    output_flat = batched_mul(U_out, z)                  # (ch_out, b, prod(modes))
-    output_perm = permutedims(output_flat, (3, 1, 2))    # (prod(modes), ch_out, b)
-    output = reshape(output_perm, modes..., ch_out, b)   # (modes..., ch_out, b)
+    z_flat = reshape(z, r_out, :)                             # (r_out, b⋅prod(modes))
+    output_flat = U_out * z_flat                              # (ch_out, b⋅prod(modes))
+    output_perm = reshape(output_flat, ch_out, b, modes...)   # (ch_out, b, modes...)
+    output = unpermute_mode_dims(output_perm)                 # (modes..., ch_out, b)
     return output
+end
+
+function permute_mode_dims(x::AbstractArray{T,3}) where {T}
+    # (m₁, r_in, b) -> (r_in, b, m₁)
+    x_perm = permutedims(x, (2, 3, 1))
+    return x_perm
+end
+function permute_mode_dims(x::AbstractArray{T,4}) where {T}
+    # (m₁, m₂, r_in, b) -> (r_in, b, m₁, m₂)
+    x_perm = permutedims(x, (3, 4, 1, 2))
+    return x_perm
+end
+function permute_mode_dims(x::AbstractArray{T,5}) where {T}
+    # (m₁, m₂, m₃, r_in, b) -> (r_in, b, m₁, m₂, m₃)
+    x_perm = permutedims(x, (4, 5, 1, 2, 3))
+    return x_perm
+end
+
+function unpermute_mode_dims(x_perm::AbstractArray{T,3}) where {T}
+    # (r_out, b, m₁) -> (m₁, r_out, b)
+    x = permutedims(x_perm, (3, 1, 2))
+    return x
+end
+function unpermute_mode_dims(x_perm::AbstractArray{T,4}) where {T}
+    # (r_out, b, m₁, m₂) -> (m₁, m₂, r_out, b)
+    x = permutedims(x_perm, (3, 4, 1, 2))
+    return x
+end
+function unpermute_mode_dims(x_perm::AbstractArray{T,5}) where {T}
+    # (r_out, b, m₁, m₂, m₃) -> (m₁, m₂, m₃, r_out, b)
+    x = permutedims(x_perm, (3, 4, 5, 1, 2))
+    return x
 end
 
 struct ModeKProduct{K} end
