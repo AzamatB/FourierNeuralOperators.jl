@@ -1,4 +1,4 @@
-name = "TensorizedFourierNeuralOperators"
+name = "FourierNeuralOperators"
 uuid = "fad0b1a5-a77e-47d0-848c-9f04c700d34f"
 authors = ["AzamatB"]
 version = "0.1.0"

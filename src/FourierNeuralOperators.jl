@@ -1,4 +1,4 @@
-module TensorizedFourierNeuralOperators
+module FourierNeuralOperators
 
 ########   Multi-Grid Tensorized Fourier Neural Operator for High-Resolution PDEs   ########
 #
@@ -17,4 +17,4 @@ include("SoftGating.jl")
 include("FourierNeuralOperatorBlock.jl")
 include("FourierNeuralOperator.jl")
 
-end # module TensorizedFourierNeuralOperators
+end # module FourierNeuralOperators

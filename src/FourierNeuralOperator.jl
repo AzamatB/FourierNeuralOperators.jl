@@ -1,10 +1,12 @@
-struct FourierNeuralOperator{D,L,Lift,FNOBlocks,Project} <: Lux.AbstractLuxContainerLayer
+struct FourierNeuralOperator{
+    D,L,Lift,FNOBlocks,Project
+} <: Lux.AbstractLuxContainerLayer{(:lift, :fno_blocks, :project)}
     lift::Lift
     fno_blocks::FNOBlocks
     project::Project
 end
 
-function FourierNeuralOperator(
+function FourierNeuralOperator{D}(
     channels_in::Int, channels_hidden::Int, channels_out::Int;
     modes::NTuple{L,Int}=(32, 32, 32, 32), rank_ratio::Float32=0.5f0
 ) where {D,L}
