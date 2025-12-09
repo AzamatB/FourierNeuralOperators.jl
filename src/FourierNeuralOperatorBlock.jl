@@ -74,21 +74,21 @@ function (layer::FourierNeuralOperatorBlock)(
     x::AbstractArray, params::NamedTuple, states::NamedTuple
 )
     # first skip connection
-    (x_skip₁, _) = layer.skip₁(x, params.skip₁, states.skip₁)
+    (x_skip₁, _) = layer.skip₁(x, params.skip₁, states)
     # second skip connection
-    (x_skip₂, _) = layer.skip₂(x, params.skip₂, states.skip₂)
+    (x_skip₂, _) = layer.skip₂(x, params.skip₂, states)
     # spectral convolution
-    (x_conv, _) = layer.spectral_conv(x, params.spectral_conv, states.spectral_conv)
+    (x_conv, _) = layer.spectral_conv(x, params.spectral_conv, states)
     # first normalization
-    (x_norm₁, _) = layer.norm₁(x_conv, params.norm₁, states.norm₁)
+    (x_norm₁, _) = layer.norm₁(x_conv, params.norm₁, states)
     # first residual addition followed by first activation
     x_act = gelu.(x_norm₁ .+ x_skip₁)
     # 2-layer channel MLP
-    (x_mlp, _) = layer.channel_mlp(x_act, params.channel_mlp, states.channel_mlp)
+    (x_mlp, _) = layer.channel_mlp(x_act, params.channel_mlp, states)
     # second residual addition
     x_res = x_mlp .+ x_skip₂
     # second normalization
-    (x_norm₂, _) = layer.norm₂(x_res, params.norm₂, states.norm₂)
+    (x_norm₂, _) = layer.norm₂(x_res, params.norm₂, states)
     # final output: second activation
     output = gelu.(x_norm₂)
     # update normalization states
