@@ -87,17 +87,16 @@ function (layer::FactorizedSpectralConv{D})(
     return (output, states)
 end
 
-function left_slice(len::Int, k::Int)
-    k = 2k + 1
-    stop = min(len, k)
+function left_slice(k::Int)
+    stop = 2k + 1
     # 0th mode followed by 2k positive modes = (2k + 1) elements
     return 1:stop
 end
 
 function center_slice(len::Int, k::Int)
     center = len ÷ 2 + 1
-    start = max(1, center - k)
-    stop = min(len, center + k)
+    start = center - k
+    stop = center + k
     # 0th mode at the center + k negative modes before + k positive modes after = (2k + 1) elements
     return start:stop
 end
@@ -106,7 +105,7 @@ function compute_padding(shape::NTuple{D,Int}, slices::NTuple{D,UnitRange{Int}})
     pad = NTuple{2D,Int}(ntuple(Val(2D)) do n
         d = (n + 1) ÷ 2
         slice = slices[d]
-        isodd(d) ? (slice.start - 1) : (shape[d] - slice.stop)
+        isodd(n) ? (slice.start - 1) : (shape[d] - slice.stop)
     end)
     return pad
 end
@@ -143,8 +142,7 @@ function transform_and_truncate(
     shape_ω = size(ω_shifted)[dims]
     modes = ft.modes
     slices = NTuple{D,UnitRange{Int}}(ntuple(
-        d -> (d == 1) ? left_slice(shape_ω[d], modes[d]) : center_slice(shape_ω[d], modes[d]),
-        Val(D)
+        d -> (d == 1) ? left_slice(modes[d]) : center_slice(shape_ω[d], modes[d]), Val(D)
     ))
     # truncate higher frequencies: freq_dims -> modes
     ω_truncated = view(ω_shifted, slices..., :, :)   # (modes..., channels, batch)
@@ -160,7 +158,7 @@ function transform_and_truncate(
     ω = rfft(x, 1)                           # (freq_dim, channels, batch)
     # take 1:k
     shape_ω = size(ω)[1:1]
-    slice = left_slice(shape_ω[1], ft.modes[1])
+    slice = left_slice(ft.modes[1])
     # truncate higher frequencies: freq_dim -> modes
     ω_truncated = view(ω, slice, :, :)       # (modes, channels, batch)
     pad = compute_padding(shape_ω, (slice,))
@@ -193,6 +191,7 @@ function compute_tucker_rank_dims(
     modes::NTuple{D,Int},
     rank_ratio::Float32
 ) where {D}
+    modes = 2 .* modes .+ 1  # account for negative frequencies
     rank_in = max(1, floor(Int, channels_in * rank_ratio))
     rank_out = max(1, floor(Int, channels_out * rank_ratio))
     rank_modes = ntuple(i -> max(1, floor(Int, modes[i] * rank_ratio)), Val(D))
