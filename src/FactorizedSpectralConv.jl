@@ -84,9 +84,12 @@ function compute_tucker_rank_dims(
     modes::NTuple{D,Int},
     rank_ratio::Float32
 ) where {D}
-    rank_in = max(1, floor(Int, channels_in * rank_ratio))
-    rank_out = max(1, floor(Int, channels_out * rank_ratio))
-    rank_modes = ntuple(i -> max(1, floor(Int, modes[i] * rank_ratio)), Val(D))
+    rank_in = clamp(floor(Int, channels_in * rank_ratio), 1, channels_in)
+    rank_out = clamp(floor(Int, channels_out * rank_ratio), 1, channels_out)
+    rank_modes = ntuple(Val(D)) do d
+        mode = modes[d]
+        clamp(floor(Int, mode * rank_ratio), 1, mode)
+    end
     return (rank_in, rank_out, rank_modes)
 end
 
