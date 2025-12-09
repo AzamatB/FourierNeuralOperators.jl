@@ -169,22 +169,22 @@ end
 
 function inverse(
     ft::FourierTransform{T,NTuple{D,Int}},
-    ω_shifted::AbstractArray{C,N},               # (freq_dims..., channels_out, batch)
-    x::AbstractArray{F,N}                        # (spatial_dims..., channels_in, batch)
+    ω_shifted::AbstractArray{C,N},           # (freq_dims..., channels_out, batch)
+    x::AbstractArray{F,N}                    # (spatial_dims..., channels_in, batch)
 ) where {T,D,C<:Complex,F,N}
     is_real = (F <: Real)
     dims = (1 + is_real):D
     ω = ifftshift(ω_shifted, dims)
-    y = is_real ? irfft(ω, 1:D) : ifft(ω, 1:D)   # (spatial_dims..., channels_out, batch)
-    return y
+    y = is_real ? irfft(ω, size(x, 1), 1:D) : ifft(ω, 1:D)
+    return y                                 # (spatial_dims..., channels_out, batch)
 end
 
 function inverse(
     ft::FourierTransform{T,NTuple{1,Int}},
-    ω::AbstractArray{C,3},                       # (freq_dim, channels_out, batch)
-    x::AbstractArray{R,3}                        # (spatial_dim, channels_in, batch)
+    ω::AbstractArray{C,3},                   # (freq_dim, channels_out, batch)
+    x::AbstractArray{R,3}                    # (spatial_dim, channels_in, batch)
 ) where {T,C<:Complex,R<:Real}
-    return irfft(ω, 1)                           # (spatial_dim, channels_out, batch)
+    return irfft(ω, 1)                       # (spatial_dim, channels_out, batch)
 end
 
 function compute_tucker_rank_dims(
