@@ -18,14 +18,11 @@ function Lux.initialparameters(rng::AbstractRNG, layer::FactorizedSpectralConv{D
     channels_out = layer.channels_out
     modes = 2 .* layer.modes .+ 1  # account for 0th and negative frequencies
     rank_ratio = layer.rank_ratio
-
     # determine ranks for Tucker decomposition
     (rank_in, rank_out, rank_modes) = compute_tucker_rank_dims(channels_in, channels_out, modes, rank_ratio)
-    # simple Glorot-style scaling
-    scale = sqrt(2.0f0 / (channels_in + channels_out))
 
     # core tensor ordering: (rank_out, rank_in, rank_modes...)
-    core = scale .* glorot_uniform(rng, ComplexF32, rank_out, rank_in, rank_modes...)
+    core  = glorot_uniform(rng, ComplexF32, rank_out, rank_in, rank_modes...)
     U_in  = glorot_uniform(rng, ComplexF32, channels_in, rank_in)     # (ch_in × r_in)
     U_out = glorot_uniform(rng, ComplexF32, channels_out, rank_out)   # (ch_out × r_out)
     # U_modes: (rank_dim × mode_dim)
