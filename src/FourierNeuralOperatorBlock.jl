@@ -52,10 +52,6 @@ function Lux.initialparameters(rng::AbstractRNG, layer::FourierNeuralOperatorBlo
     return params
 end
 
-function Lux.initialstates(rng::AbstractRNG, layer::FourierNeuralOperatorBlock)
-    return (;) # stateless
-end
-
 function Lux.parameterlength(layer::FourierNeuralOperatorBlock)
     len  = Lux.parameterlength(layer.spectral_conv)
     len += Lux.parameterlength(layer.channel_mlp)
@@ -64,10 +60,6 @@ function Lux.parameterlength(layer::FourierNeuralOperatorBlock)
     len += Lux.parameterlength(layer.norm₁)
     len += Lux.parameterlength(layer.norm₂)
     return len
-end
-
-function Lux.statelength(::FourierNeuralOperatorBlock)
-    return 0
 end
 
 function (layer::FourierNeuralOperatorBlock)(
