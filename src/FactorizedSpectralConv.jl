@@ -174,7 +174,7 @@ function inverse(
 ) where {T,D,C<:Complex,F,N}
     is_real = (F <: Real)
     dims = (1 + is_real):D
-    ω = fftshift(ω_shifted, dims)
+    ω = ifftshift(ω_shifted, dims)
     y = is_real ? irfft(ω, 1:D) : ifft(ω, 1:D)   # (spatial_dims..., channels_out, batch)
     return y
 end
