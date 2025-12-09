@@ -15,5 +15,6 @@ using NeuralOperators: FourierTransform
 include("FactorizedSpectralConv.jl")
 include("SoftGating.jl")
 include("FourierNeuralOperatorBlock.jl")
+include("FourierNeuralOperator.jl")
 
 end # module TensorizedFourierNeuralOperators

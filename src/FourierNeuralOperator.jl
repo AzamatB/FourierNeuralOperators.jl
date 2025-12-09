@@ -1,0 +1,3 @@
+
+struct FourierNeuralOperator
+end
