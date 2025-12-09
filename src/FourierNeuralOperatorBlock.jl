@@ -41,28 +41,56 @@ function FourierNeuralOperatorBlock(
     )
 end
 
-function (model::FourierNeuralOperatorBlock)(
+function Lux.initialparameters(rng::AbstractRNG, layer::FourierNeuralOperatorBlock)
+    spectral_conv = Lux.initialparameters(rng, layer.spectral_conv)
+    channel_mlp = Lux.initialparameters(rng, layer.channel_mlp)
+    skip₁ = Lux.initialparameters(rng, layer.skip₁)
+    skip₂ = Lux.initialparameters(rng, layer.skip₂)
+    norm₁ = Lux.initialparameters(rng, layer.norm₁)
+    norm₂ = Lux.initialparameters(rng, layer.norm₂)
+    params = (; spectral_conv, channel_mlp, skip₁, skip₂, norm₁, norm₂)
+    return params
+end
+
+function Lux.initialstates(rng::AbstractRNG, layer::FourierNeuralOperatorBlock)
+    return (;) # stateless
+end
+
+function Lux.parameterlength(layer::FourierNeuralOperatorBlock)
+    len = Lux.parameterlength(layer.spectral_conv)
+    len += Lux.parameterlength(layer.channel_mlp)
+    len += Lux.parameterlength(layer.skip₁)
+    len += Lux.parameterlength(layer.skip₂)
+    len += Lux.parameterlength(layer.norm₁)
+    len += Lux.parameterlength(layer.norm₂)
+    return len
+end
+
+function Lux.statelength(::FourierNeuralOperatorBlock)
+    return 0
+end
+
+function (layer::FourierNeuralOperatorBlock)(
     x::AbstractArray, params::NamedTuple, states::NamedTuple
 )
     # first skip connection
-    (x_skip₁, _) = model.skip₁(x, params.skip₁, states.skip₁)
+    (x_skip₁, _) = layer.skip₁(x, params.skip₁, states.skip₁)
     # second skip connection
-    (x_skip₂, _) = model.skip₂(x, params.skip₂, states.skip₂)
+    (x_skip₂, _) = layer.skip₂(x, params.skip₂, states.skip₂)
     # spectral convolution
-    (x_conv, _) = model.spectral_conv(x, params.spectral_conv, states.spectral_conv)
+    (x_conv, _) = layer.spectral_conv(x, params.spectral_conv, states.spectral_conv)
     # first normalization
-    (x_norm₁, _) = model.norm₁(x_conv, params.norm₁, states.norm₁)
+    (x_norm₁, _) = layer.norm₁(x_conv, params.norm₁, states.norm₁)
     # first residual addition followed by first activation
     x_act = gelu.(x_norm₁ .+ x_skip₁)
     # 2-layer channel MLP
-    (x_mlp, _) = model.channel_mlp(x_act, params.channel_mlp, states.channel_mlp)
+    (x_mlp, _) = layer.channel_mlp(x_act, params.channel_mlp, states.channel_mlp)
     # second residual addition
     x_res = x_mlp .+ x_skip₂
     # second normalization
-    (x_norm₂, _) = model.norm₂(x_res, params.norm₂, states.norm₂)
+    (x_norm₂, _) = layer.norm₂(x_res, params.norm₂, states.norm₂)
     # final output: second activation
     output = gelu.(x_norm₂)
     # update normalization states
-    states_out = (;)
-    return (output, states_out)
+    return (output, states)
 end
