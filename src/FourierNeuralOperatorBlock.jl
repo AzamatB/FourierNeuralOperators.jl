@@ -79,6 +79,10 @@ function (layer::FourierNeuralOperatorBlock)(
     # 2-layer channel MLP
     (x_mlp, _) = layer.channel_mlp(x_act, params.channel_mlp, state)
     # second residual addition
+    # Note: this will fail with dimensionality mismatch unless channels_in == channels_out.
+    # This is the case for FNO blocks inside FNO, but for generality, consider replacing the
+    # SoftGating with a pointwise Conv(channels_in => channels_out) to allow channel
+    # dimension changes.
     x_res = x_mlp .+ x_skip₂
     # second normalization
     (x_norm₂, state_norm₂) = layer.norm₂(x_res, params.norm₂, states.norm₂)
