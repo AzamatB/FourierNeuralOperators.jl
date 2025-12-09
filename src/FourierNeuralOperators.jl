@@ -4,7 +4,7 @@ module FourierNeuralOperators
 #
 # See arxiv.org/abs/2310.00120 for details.
 
-export FactorizedSpectralConv
+export FactorizedSpectralConv, FourierNeuralOperator, FourierNeuralOperatorBlock
 
 using Lux
 using FFTW
