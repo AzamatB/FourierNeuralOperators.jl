@@ -88,9 +88,9 @@ function (layer::FactorizedSpectralConv{D})(
 end
 
 function left_slice(len::Int, k::Int)
-    k += 1
+    k = 2k + 1
     stop = min(len, k)
-    # 0th mode followed by k positive modes = (2k + 1) elements
+    # 0th mode followed by 2k positive modes = (2k + 1) elements
     return 1:stop
 end
 
@@ -143,7 +143,7 @@ function transform_and_truncate(
     shape_ω = size(ω_shifted)[dims]
     modes = ft.modes
     slices = NTuple{D,UnitRange{Int}}(ntuple(
-        d -> d == 1 ? left_slice(shape_ω[d], modes[d]) : center_slice(shape_ω[d], modes[d]),
+        d -> (d == 1) ? left_slice(shape_ω[d], modes[d]) : center_slice(shape_ω[d], modes[d]),
         Val(D)
     ))
     # truncate higher frequencies: freq_dims -> modes
