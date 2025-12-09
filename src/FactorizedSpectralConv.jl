@@ -119,7 +119,7 @@ function transform_and_truncate(
     ω = fft(x, dims)                                 # (freq_dims..., channels, batch)
     # shift along every dimension
     ω_shifted = fftshift(ω, dims)                    # (freq_dims..., channels, batch)
-    # take center crops in all dimenions
+    # take center crops in all dimensions
     shape_ω = size(ω_shifted)[dims]
     modes = ft.modes
     slices = NTuple{D,UnitRange{Int}}(ntuple(d -> center_slice(shape_ω[d], modes[d]), Val(D)))
