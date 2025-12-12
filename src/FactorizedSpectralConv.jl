@@ -190,8 +190,7 @@ function inverse(
     x::AbstractArray{R,N}                           # (spatial_dims..., channels_in, batch)
 ) where {D,C<:Complex,R<:Real,N}
     ω = ifftshift(ω_shifted, 2:D)
-    y_c = irfft(ω, size(x, 1), 1:D)                 # (spatial_dims..., channels_out, batch)
-    y = real(y_c)
+    y = irfft(ω, size(x, 1), 1:D)                 # (spatial_dims..., channels_out, batch)
     return y
 end
 
@@ -200,8 +199,7 @@ function inverse(
     ω::AbstractArray{C,3},                           # (freq_dim, channels_out, batch)
     x::AbstractArray{R,3}                            # (spatial_dim, channels_in, batch)
 ) where {C<:Complex,R<:Real}
-    y_c = irfft(ω, size(x, 1), 1)                    # (spatial_dim, channels_out, batch)
-    y = real(y_c)
+    y = irfft(ω, size(x, 1), 1)                    # (spatial_dim, channels_out, batch)
     return y
 end
 

@@ -6,8 +6,8 @@ module FourierNeuralOperators
 
 export FactorizedSpectralConv, FourierNeuralOperator, FourierNeuralOperatorBlock
 
+using AbstractFFTs: fft, rfft, ifft, irfft, fftshift, ifftshift
 using Lux
-using FFTW
 using Random
 using NNlib: batched_mul, pad_constant
 
