@@ -41,50 +41,21 @@ function FourierNeuralOperatorBlock(
     )
 end
 
-function Lux.initialparameters(rng::AbstractRNG, layer::FourierNeuralOperatorBlock)
-    spectral_conv = Lux.initialparameters(rng, layer.spectral_conv)
-    channel_mlp = Lux.initialparameters(rng, layer.channel_mlp)
-    skip₁ = Lux.initialparameters(rng, layer.skip₁)
-    skip₂ = Lux.initialparameters(rng, layer.skip₂)
-    norm₁ = Lux.initialparameters(rng, layer.norm₁)
-    norm₂ = Lux.initialparameters(rng, layer.norm₂)
-    params = (; spectral_conv, channel_mlp, skip₁, skip₂, norm₁, norm₂)
-    return params
-end
-
-function Lux.initialstates(rng::AbstractRNG, layer::FourierNeuralOperatorBlock)
-    norm₁ = Lux.initialstates(rng, layer.norm₁)
-    norm₂ = Lux.initialstates(rng, layer.norm₂)
-    states = (; norm₁, norm₂)
-    return states
-end
-
-function Lux.parameterlength(layer::FourierNeuralOperatorBlock)
-    len  = Lux.parameterlength(layer.spectral_conv)
-    len += Lux.parameterlength(layer.channel_mlp)
-    len += Lux.parameterlength(layer.skip₁)
-    len += Lux.parameterlength(layer.skip₂)
-    len += Lux.parameterlength(layer.norm₁)
-    len += Lux.parameterlength(layer.norm₂)
-    return len
-end
-
 function (layer::FourierNeuralOperatorBlock)(
     x::AbstractArray, params::NamedTuple, states::NamedTuple
 )
-    state = (;)
     # first skip connection
-    (x_skip₁, _) = layer.skip₁(x, params.skip₁, state)
+    (x_skip₁, _) = layer.skip₁(x, params.skip₁, states.skip₁)
     # second skip connection
-    (x_skip₂, _) = layer.skip₂(x, params.skip₂, state)
+    (x_skip₂, _) = layer.skip₂(x, params.skip₂, states.skip₂)
     # spectral convolution
-    (x_conv, _) = layer.spectral_conv(x, params.spectral_conv, state)
+    (x_conv, _) = layer.spectral_conv(x, params.spectral_conv, states.spectral_conv)
     # first normalization
     (x_norm₁, state_norm₁) = layer.norm₁(x_conv, params.norm₁, states.norm₁)
     # first residual addition followed by first activation
     x_act = gelu.(x_norm₁ .+ x_skip₁)
     # 2-layer channel MLP
-    (x_mlp, _) = layer.channel_mlp(x_act, params.channel_mlp, state)
+    (x_mlp, _) = layer.channel_mlp(x_act, params.channel_mlp, states.channel_mlp)
     # second residual addition
     # Note: this will fail with dimensionality mismatch unless channels_in == channels_out.
     # This is the case for FNO blocks inside FNO, but for generality, consider replacing the

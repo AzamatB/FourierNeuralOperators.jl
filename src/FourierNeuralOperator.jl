@@ -36,31 +36,15 @@ function FourierNeuralOperator{D}(
     return FourierNeuralOperator{D,L,Lift,FNOBlocks,Project}(lift, fno_blocks, project)
 end
 
-function Lux.initialparameters(rng::AbstractRNG, layer::FourierNeuralOperator)
-    lift = Lux.initialparameters(rng, layer.lift)
-    fno_blocks = Lux.initialparameters(rng, layer.fno_blocks)
-    project = Lux.initialparameters(rng, layer.project)
-    params = (; lift, fno_blocks, project)
-    return params
-end
-
-function Lux.parameterlength(layer::FourierNeuralOperator)
-    len  = Lux.parameterlength(layer.lift)
-    len += Lux.parameterlength(layer.fno_blocks)
-    len += Lux.parameterlength(layer.project)
-    return len
-end
-
 function (layer::FourierNeuralOperator)(
     x::AbstractArray, params::NamedTuple, states::NamedTuple
 )
-    state = (;)
     # lift
-    (x_lift, _) = layer.lift(x, params.lift, state)
+    (x_lift, _) = layer.lift(x, params.lift, states.lift)
     # apply FNO blocks
     (x_fno, states_fno_blocks) = layer.fno_blocks(x_lift, params.fno_blocks, states.fno_blocks)
     # project
-    (output, _) = layer.project(x_fno, params.project, state)
+    (output, _) = layer.project(x_fno, params.project, states.project)
     states_out = (; fno_blocks=states_fno_blocks)
     return (output, states_out)
 end
