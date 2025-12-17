@@ -2,7 +2,6 @@ name = "OptimalTransportNeuralOperators"
 authors = ["Azamat Berdyshev <aberdysh@gmail.com>"]
 
 [deps]
-CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 FourierNeuralOperators = "fad0b1a5-a77e-47d0-848c-9f04c700d34f"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"

@@ -8,14 +8,11 @@ using Printf
 using Static
 using Random
 
-using CUDA
 using Lux
 using Reactant
 using Enzyme
 using Optimisers
 using LinearAlgebra
-
-CUDA.allowscalar(false)
 
 # select Reactant CUDA backend and a Reactant device
 Reactant.set_default_backend("gpu")            # "gpu" = CUDA backend (via XLA/PJRT)
@@ -30,59 +27,96 @@ Random.seed!(rng, 42)
 const dataset_dir = normpath(joinpath(@__DIR__, "..", "datasets/ShapeNet-Car"))
 (dataset_train, dataset_val, _) = load_datasets(dataset_dir, ".jls")
 
-# set model parameters
-features₁ = first(dataset_train.features)
+# set training hyperparameters
+const num_epochs = 100
+const learning_rate = 1f-3
+const weight_decay = 1f-4
+
+# set model hyperparameters
+x₁ = first(dataset_train.xs)
+(features₁, decoding_indices) = x₁
 const D = ndims(features₁) - 2
 const channels_in = size(features₁, 3)
 const channels_hidden = channels_in
 const channels_out = 1
-const modes = (12, ntuple(_ -> 16, static(D - 1))...)
+const modes = (16, 16, 16, 16) # L = 4 FNO blocks in the FNO
 const rank_ratio = 0.5f0
 
-# set optimiser parameters
-const learning_rate = 1f-3
-const weight_decay = 1f-4
-
 # instantiate FNO model
-model = FNO.FourierNeuralOperator{D}(
+model = FNO.OptimalTransportNeuralOperator{D}(
     channels_in, channels_hidden, channels_out; modes, rank_ratio
 )
 display(model)
 
 # setup model parameters and states
 (ps, st) = Lux.setup(rng, model)
-st_val = Lux.testmode(st)
 params = ps |> device
 states = st |> device
-states_val = st_val |> device
 
 # move training data to Reactant device
-xs_train = device.(dataset_train.features)
-ys_train = device.(dataset_train.targets)
-decoding_indices_train = device.(dataset_train.decoding_indices)
+xs_train = device.(dataset_train.xs)
+ys_train = device.(dataset_train.ys)
 
 # move validation data to Reactant device
-xs_val = device.(dataset_val.features)
-ys_val = device.(dataset_val.targets)
-decoding_indices_val = device.(dataset_val.decoding_indices)
+xs_val = device.(dataset_val.xs)
+ys_val = device.(dataset_val.ys)
 
 # instantiate optimiser
 optimiser = AdamW(eta=learning_rate, lambda=weight_decay)
 
 # instantiate training state
 train_state = Training.TrainState(model, params, states, optimiser)
+loss_func = MSELoss()
 
-params = ps
-states = st
-target = dataset_train.targets[1]
-decoding_indices = dataset_train.decoding_indices[1]
+# precompile model for validation evaluation
+compiled_model = @compile model(x₁, ts.parameters, Lux.testmode(ts.states))
+loss_val = compute_dataset_loss(
+    compiled_model, train_state.parameters, Lux.testmode(train_state.states), (xs_val, ys_val)
+)
+@printf "Validation loss before training:  %4.6f\n" loss_val
 
-MSELoss()
+@info "Training..."
+for epoch in 1:num_epochs
+    loss_train = 0.0f0
+    for (xᵢ, yᵢ) in zip(xs_train, ys_train)
+        _, loss, _, train_state = Training.single_train_step!(
+            AutoEnzyme(), loss_func, (xᵢ, yᵢ), train_state
+        )
+        loss_train += loss
+    end
+    loss_train /= length(ys_train)
+    @printf "Epoch [%3d]: Training Loss  %4.6f\n" epoch loss_train
+    # evaluate the model on validation set
+    states_val = Lux.testmode(train_state.states)
+    loss_val = compute_dataset_loss(
+        compiled_model, train_state.parameters, states_val, (xs_val, ys_val)
+    )
+    @printf "Epoch [%3d]: Validation loss  %4.6f\n" epoch loss_val
+end
 
-(ys, st_out) = model(features₁, params, states)
-ys_vec = reshape(ys, :)
-ys_phys = ys_vec[decoding_indices]
-ys_phys - target
+@info "Training completed."
+params_opt = train_state.parameters
+states_val = Lux.testmode(train_state.states)
+# return (compiled_model, params_opt, states_val)
+# end
+
+function compute_dataset_loss(
+    model::OptimalTransportNeuralOperator,
+    params::NamedTuple,
+    states::NamedTuple,
+    (xs, ys)
+)
+    mse = 0.0f0
+    for (x, y) in zip(xs, ys)
+        (ŷ, _) = model(x, params, states)
+        len = length(y)
+        mse += sum(abs.(y .- ŷ)) / len
+    end
+    # a mean over all samples
+    count = length(ys)
+    loss = mse / count
+    return loss
+end
 
 function load_datasets(
     dataset_dir::String,
