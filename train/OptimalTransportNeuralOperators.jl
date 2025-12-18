@@ -138,15 +138,15 @@ function load_datasets(
     test_slice = (val_idx_last+1):len
     ote_samples = OTE.load_sample.(data_sample_paths)
 
-    xs = Tuple{Array{Float32,4},Vector{Int}}[get_model_inputs(ote_samples[i]) for i in train_slice]
+    xs = Tuple{Array{Float32,4},Vector{Int32}}[get_model_inputs(ote_samples[i]) for i in train_slice]
     ys = Vector{Float32}[ote_samples[i].target for i in train_slice]
     dataset_train = (; xs, ys)
 
-    xs = Tuple{Array{Float32,4},Vector{Int}}[get_model_inputs(ote_samples[i]) for i in val_slice]
+    xs = Tuple{Array{Float32,4},Vector{Int32}}[get_model_inputs(ote_samples[i]) for i in val_slice]
     ys = Vector{Float32}[ote_samples[i].target for i in val_slice]
     dataset_val = (; xs, ys)
 
-    xs = Tuple{Array{Float32,4},Vector{Int}}[get_model_inputs(ote_samples[i]) for i in test_slice]
+    xs = Tuple{Array{Float32,4},Vector{Int32}}[get_model_inputs(ote_samples[i]) for i in test_slice]
     ys = Vector{Float32}[ote_samples[i].target for i in test_slice]
     dataset_test = (; xs, ys)
 
