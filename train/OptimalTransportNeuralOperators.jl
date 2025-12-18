@@ -140,7 +140,7 @@ for epoch in 1:num_epochs
     loss_train = 0.0f0
     for (xᵢ, yᵢ) in zip(xs_train, ys_train)
         _, loss, _, train_state = Training.single_train_step!(
-            AutoEnzyme(), loss_func, (xᵢ, yᵢ), train_state
+            AutoZygote(), loss_func, (xᵢ, yᵢ), train_state
         )
         loss_train += loss
     end
