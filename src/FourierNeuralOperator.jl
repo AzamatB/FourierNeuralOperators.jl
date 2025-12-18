@@ -45,11 +45,11 @@ function (layer::FourierNeuralOperator)(
     x::DenseArray{<:Number}, params::NamedTuple, states::NamedTuple
 )
     # lift
-    (x_lift, _) = layer.lift(x, params.lift, states.lift)
+    (x_lift, states_lift) = layer.lift(x, params.lift, states.lift)
     # apply FNO blocks
     (x_fno, states_fno_blocks) = layer.fno_blocks(x_lift, params.fno_blocks, states.fno_blocks)
     # project
-    (output, _) = layer.project(x_fno, params.project, states.project)
-    states_out = (; fno_blocks=states_fno_blocks)
+    (output, states_project) = layer.project(x_fno, params.project, states.project)
+    states_out = (; lift=states_lift, fno_blocks=states_fno_blocks, project=states_project)
     return (output, states_out)
 end

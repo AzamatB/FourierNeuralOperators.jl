@@ -171,4 +171,4 @@ const num_epochs = 100
 const dataset_dir = normpath(joinpath(@__DIR__, "..", "datasets/ShapeNet-Car"))
 const weights_save_dir = normpath(joinpath(@__DIR__, "pretrained_otno_weights"))
 
-(model, params_opt, states_val) = train_model(rng, dataset_dir; num_epochs, weights_save_dir)
+@time (model, params_opt, states_val) = train_model(rng, dataset_dir; num_epochs, weights_save_dir)
