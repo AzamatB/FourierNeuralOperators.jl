@@ -22,6 +22,6 @@ function (model::OptimalTransportNeuralOperator)(
     (y, states_out) = model.fno(x, params.fno, states.fno)
     y_vec = reshape(y, :)
     # pullback to physical space using decoding indices
-    y_phys = gather(y_vec, decoding_indices)
+    y_phys = y_vec[decoding_indices]
     return (y_phys, states_out)
 end

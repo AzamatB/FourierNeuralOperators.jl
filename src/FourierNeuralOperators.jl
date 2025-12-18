@@ -9,7 +9,7 @@ export FactorizedSpectralConv, FourierNeuralOperator, FourierNeuralOperatorBlock
 using AbstractFFTs: fft, rfft, ifft, irfft, fftshift, ifftshift
 using Lux
 using Random
-using NNlib: batched_mul, gather, pad_constant
+using NNlib: batched_mul, pad_constant
 using Static
 
 include("FactorizedSpectralConv.jl")
