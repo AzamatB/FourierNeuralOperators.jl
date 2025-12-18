@@ -136,7 +136,7 @@ function transform_and_truncate(
     modes = layer.modes
     slices = NTuple{D,UnitRange{Int}}(ntuple(d -> center_slice(shape_ω[d], modes[d]), static(D)))
     # truncate higher frequencies: freq_dims -> modes
-    ω_truncated = view(ω_shifted, slices..., :, :)   # (modes..., channels, batch)
+    ω_truncated = ω_shifted[slices..., :, :]   # (modes..., channels, batch)
     pad = compute_padding(shape_ω, slices)
     return (ω_truncated, pad)
 end
@@ -158,7 +158,7 @@ function transform_and_truncate(
         d -> (d == 1) ? left_slice(modes[d]) : center_slice(shape_ω[d], modes[d]), static(D)
     ))
     # truncate higher frequencies: freq_dims -> modes
-    ω_truncated = view(ω_shifted, slices..., :, :)   # (modes..., channels, batch)
+    ω_truncated = ω_shifted[slices..., :, :]   # (modes..., channels, batch)
     pad = compute_padding(shape_ω, slices)
     return (ω_truncated, pad)
 end
@@ -174,7 +174,7 @@ function transform_and_truncate(
     shape_ω = size(ω)
     slice = left_slice(layer.modes[1])
     # truncate higher frequencies: freq_dim -> modes
-    ω_truncated = view(ω, slice, :, :)               # (modes, channels, batch)
+    ω_truncated = ω[slice, :, :]               # (modes, channels, batch)
     pad = compute_padding(shape_ω, (slice,))
     return (ω_truncated, pad)
 end
@@ -218,7 +218,7 @@ function compute_tensor_contractions(
     (ch_in, r_in) = size(U_in)
     (ch_out, r_out) = size(U_out)
     dims = size(x)
-    b = dims[end]
+    b = size(x, N)  # batch size
     modes = NTuple{N-2,Int}(ntuple(i -> dims[i], static(N - 2)))
 
     # project input: contract ch_in -> r_in (batching over batch)
