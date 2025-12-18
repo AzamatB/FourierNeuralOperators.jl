@@ -271,7 +271,7 @@ struct ModeKProduct{K} end
 
 # mode-k tensor-matrix product via matricization followed by batched multiplication
 function (::ModeKProduct{K})(
-    tensor::DenseArray{T,D}, matrix::AbstractMatrix{T}
+    tensor::AbstractArray{T,D}, matrix::AbstractMatrix{T}
 ) where {K,T<:Number,D}
     dims = size(tensor)
     dims_before = NTuple{K-1,Int}(ntuple(i -> dims[i],   static(K-1)))
