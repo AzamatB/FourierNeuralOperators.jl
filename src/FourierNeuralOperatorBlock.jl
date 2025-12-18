@@ -45,17 +45,17 @@ function (layer::FourierNeuralOperatorBlock)(
     x::DenseArray{<:Number}, params::NamedTuple, states::NamedTuple
 )
     # first skip connection
-    (x_skip₁, _) = layer.skip₁(x, params.skip₁, states.skip₁)
+    (x_skip₁, state_skip₁) = layer.skip₁(x, params.skip₁, states.skip₁)
     # second skip connection
-    (x_skip₂, _) = layer.skip₂(x, params.skip₂, states.skip₂)
+    (x_skip₂, state_skip₂) = layer.skip₂(x, params.skip₂, states.skip₂)
     # spectral convolution
-    (x_conv, _) = layer.spectral_conv(x, params.spectral_conv, states.spectral_conv)
+    (x_conv, state_conv) = layer.spectral_conv(x, params.spectral_conv, states.spectral_conv)
     # first normalization
     (x_norm₁, state_norm₁) = layer.norm₁(x_conv, params.norm₁, states.norm₁)
     # first residual addition followed by first activation
     x_act = gelu.(x_norm₁ .+ x_skip₁)
     # 2-layer channel MLP
-    (x_mlp, _) = layer.channel_mlp(x_act, params.channel_mlp, states.channel_mlp)
+    (x_mlp, state_mlp) = layer.channel_mlp(x_act, params.channel_mlp, states.channel_mlp)
     # second residual addition
     # Note: this will fail with dimensionality mismatch unless channels_in == channels_out.
     # This is the case for FNO blocks inside FNO, but for generality, consider replacing the
@@ -66,7 +66,13 @@ function (layer::FourierNeuralOperatorBlock)(
     (x_norm₂, state_norm₂) = layer.norm₂(x_res, params.norm₂, states.norm₂)
     # final output: second activation
     output = gelu.(x_norm₂)
-    states_out = (; norm₁ = state_norm₁, norm₂ = state_norm₂)
-    # update normalization states
+    states_out = (;
+        spectral_conv=state_conv,
+        channel_mlp=state_mlp,
+        skip₁=state_skip₁,
+        skip₂=state_skip₂,
+        norm₁=state_norm₁,
+        norm₂=state_norm₂
+    )
     return (output, states_out)
 end

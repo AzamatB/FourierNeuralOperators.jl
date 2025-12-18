@@ -19,11 +19,11 @@ function (model::OptimalTransportNeuralOperator)(
     params::NamedTuple,
     states::NamedTuple
 )
-    (y, states_fno) = model.fno(x, params.fno, states.fno)
+    (y, state_fno) = model.fno(x, params.fno, states.fno)
     y_vec = reshape(y, :)
     # pullback to physical space using decoding indices
     y_phys = y_vec[decoding_indices]
-    states_out = (; fno=states_fno)
+    states_out = (; fno=state_fno)
     return (y_phys, states_out)
 end
 
