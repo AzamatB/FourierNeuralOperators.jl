@@ -24,6 +24,61 @@ const cpu = cpu_device()                       # move results back to host for i
 const rng = Random.default_rng()
 Random.seed!(rng, 42)
 
+function compute_dataset_loss(
+    model::OptimalTransportNeuralOperator,
+    params::NamedTuple,
+    states::NamedTuple,
+    (xs, ys)
+)
+    mse = 0.0f0
+    for (x, y) in zip(xs, ys)
+        (ŷ, _) = model(x, params, states)
+        len = length(y)
+        mse += sum(abs.(y .- ŷ)) / len
+    end
+    # a mean over all samples
+    count = length(ys)
+    loss = mse / count
+    return loss
+end
+
+function load_datasets(
+    dataset_dir::String,
+    extension::String;
+    split::NamedTuple=(; train=0.93, val=0.02, test=0.05)
+)
+    @assert sum(split) == 1.0
+    data_sample_paths = readdir(dataset_dir; join=true)
+    filter!(endswith(extension), data_sample_paths)
+
+    len = length(data_sample_paths)
+    train_idx_last = ceil(Int, split.train * len)
+    val_idx_last = floor(Int, (split.train + split.val) * len)
+
+    train_slice = 1:train_idx_last
+    val_slice = (train_idx_last+1):val_idx_last
+    test_slice = (val_idx_last+1):len
+    ote_samples = OTE.load_sample.(data_sample_paths)
+
+    xs = Tuple{Array{Float32,4},Vector{Int32}}[get_model_inputs(ote_samples[i]) for i in train_slice]
+    ys = Vector{Float32}[ote_samples[i].target for i in train_slice]
+    dataset_train = (; xs, ys)
+
+    xs = Tuple{Array{Float32,4},Vector{Int32}}[get_model_inputs(ote_samples[i]) for i in val_slice]
+    ys = Vector{Float32}[ote_samples[i].target for i in val_slice]
+    dataset_val = (; xs, ys)
+
+    xs = Tuple{Array{Float32,4},Vector{Int32}}[get_model_inputs(ote_samples[i]) for i in test_slice]
+    ys = Vector{Float32}[ote_samples[i].target for i in test_slice]
+    dataset_test = (; xs, ys)
+
+    return (dataset_train, dataset_val, dataset_test)
+end
+
+function get_model_inputs(sample::OTEDataSample)
+    return (sample.features, sample.decoding_indices)
+end
+
 # load dataset into CPU memory
 const dataset_dir = normpath(joinpath(@__DIR__, "..", "datasets/ShapeNet-Car"))
 (dataset_train, dataset_val, _) = load_datasets(dataset_dir, ".jls")
@@ -101,58 +156,3 @@ params_opt = train_state.parameters
 states_val = Lux.testmode(train_state.states)
 # return (compiled_model, params_opt, states_val)
 # end
-
-function compute_dataset_loss(
-    model::OptimalTransportNeuralOperator,
-    params::NamedTuple,
-    states::NamedTuple,
-    (xs, ys)
-)
-    mse = 0.0f0
-    for (x, y) in zip(xs, ys)
-        (ŷ, _) = model(x, params, states)
-        len = length(y)
-        mse += sum(abs.(y .- ŷ)) / len
-    end
-    # a mean over all samples
-    count = length(ys)
-    loss = mse / count
-    return loss
-end
-
-function load_datasets(
-    dataset_dir::String,
-    extension::String;
-    split::NamedTuple=(; train=0.93, val=0.02, test=0.05)
-)
-    @assert sum(split) == 1.0
-    data_sample_paths = readdir(dataset_dir; join=true)
-    filter!(endswith(extension), data_sample_paths)
-
-    len = length(data_sample_paths)
-    train_idx_last = ceil(Int, split.train * len)
-    val_idx_last = floor(Int, (split.train + split.val) * len)
-
-    train_slice = 1:train_idx_last
-    val_slice = (train_idx_last+1):val_idx_last
-    test_slice = (val_idx_last+1):len
-    ote_samples = OTE.load_sample.(data_sample_paths)
-
-    xs = Tuple{Array{Float32,4},Vector{Int32}}[get_model_inputs(ote_samples[i]) for i in train_slice]
-    ys = Vector{Float32}[ote_samples[i].target for i in train_slice]
-    dataset_train = (; xs, ys)
-
-    xs = Tuple{Array{Float32,4},Vector{Int32}}[get_model_inputs(ote_samples[i]) for i in val_slice]
-    ys = Vector{Float32}[ote_samples[i].target for i in val_slice]
-    dataset_val = (; xs, ys)
-
-    xs = Tuple{Array{Float32,4},Vector{Int32}}[get_model_inputs(ote_samples[i]) for i in test_slice]
-    ys = Vector{Float32}[ote_samples[i].target for i in test_slice]
-    dataset_test = (; xs, ys)
-
-    return (dataset_train, dataset_val, dataset_test)
-end
-
-function get_model_inputs(sample::OTEDataSample)
-    return (sample.features, sample.decoding_indices)
-end
