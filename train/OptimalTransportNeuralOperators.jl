@@ -9,15 +9,18 @@ using Printf
 using Static
 using Random
 
+using CUDA
+using CUDA: DeviceMemory
+using Zygote
 using Lux
-using Reactant
-using Enzyme
+using LuxCUDA
 using Optimisers
 using LinearAlgebra
 
-# select Reactant CUDA backend and a Reactant device
-Reactant.set_default_backend("gpu")            # "gpu" = CUDA backend (via XLA/PJRT)
-const device = reactant_device(; force=true)   # error if no functional Reactant GPU device
+CUDA.allowscalar(false)  # disallow slow scalar operations on GPU
+
+
+const device = gpu_device(; force=true)   # error if no functional GPU device
 const cpu = cpu_device()                       # move results back to host for inspection
 
 # set random seed for reproducibility
