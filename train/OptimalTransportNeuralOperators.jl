@@ -167,7 +167,7 @@ end
 
 ############################################################################################
 
-const num_epochs = 100
+const num_epochs = 500
 const dataset_dir = normpath(joinpath(@__DIR__, "..", "datasets/ShapeNet-Car"))
 const weights_save_dir = normpath(joinpath(@__DIR__, "pretrained_otno_weights"))
 
