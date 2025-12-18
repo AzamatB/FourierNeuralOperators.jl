@@ -42,7 +42,7 @@ function FourierNeuralOperator{D}(
 end
 
 function (layer::FourierNeuralOperator)(
-    x::AbstractArray, params::NamedTuple, states::NamedTuple
+    x::DenseArray{<:Number}, params::NamedTuple, states::NamedTuple
 )
     # lift
     (x_lift, _) = layer.lift(x, params.lift, states.lift)

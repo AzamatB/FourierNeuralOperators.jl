@@ -42,7 +42,7 @@ function FourierNeuralOperatorBlock(
 end
 
 function (layer::FourierNeuralOperatorBlock)(
-    x::AbstractArray, params::NamedTuple, states::NamedTuple
+    x::DenseArray{<:Number}, params::NamedTuple, states::NamedTuple
 )
     # first skip connection
     (x_skip₁, _) = layer.skip₁(x, params.skip₁, states.skip₁)

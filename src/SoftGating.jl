@@ -29,10 +29,11 @@ function Lux.statelength(::SoftGating)
 end
 
 function (layer::SoftGating)(
-    x::AbstractArray{<:Number}, params::NamedTuple, states::NamedTuple
+    x::DenseArray{<:Number},   # (spatial_dims..., channels, batch)
+    params::NamedTuple,
+    states::NamedTuple
 )
-    # x: (spatial_dims..., channels, batch)
-    weights = params.weights  # (1,...,1, channels, 1), broadcastable to x
-    y = x .* weights         # (spatial_dims..., channels, batch)
+    weights = params.weights   # (1,...,1, channels, 1), broadcastable to x
+    y = x .* weights           # (spatial_dims..., channels, batch)
     return (y, states)
 end

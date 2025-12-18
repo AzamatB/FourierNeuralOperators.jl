@@ -9,8 +9,13 @@ export FactorizedSpectralConv, FourierNeuralOperator, FourierNeuralOperatorBlock
 using AbstractFFTs: fft, rfft, ifft, irfft, fftshift, ifftshift
 using Lux
 using Random
+using Reactant
+using Reactant: TracedRNumber
 using NNlib: batched_mul, pad_constant
 using Static
+
+const RFloat32 = Union{TracedRNumber{Float32},Float32}
+const RComplexF32 = Union{TracedRNumber{ComplexF32},ComplexF32}
 
 include("FactorizedSpectralConv.jl")
 

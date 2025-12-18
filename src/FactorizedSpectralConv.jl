@@ -59,7 +59,7 @@ end
 # forward pass definition
 # (spatial_dims..., channels_in, batch) -> (spatial_dims..., channels_out, batch)
 function (layer::FactorizedSpectralConv{D})(
-    x::AbstractArray,                               # (spatial_dims..., channels_in, batch)
+    x::DenseArray{<:Number},                                     # (spatial_dims..., channels_in, batch)
     params::NamedTuple,
     states::NamedTuple
 ) where {D}
@@ -72,9 +72,9 @@ function (layer::FactorizedSpectralConv{D})(
     # (modes..., channels_in, batch) -> (modes..., channels_out, batch)
     y = compute_tensor_contractions(ω, params.U_in, params.U_out, S)
     # pad truncated frequencies with zeros to restore original frequency dimensions: modes -> freq_dims
-    y_padded = pad_constant(y, pad, zero(eltype(y)); dims=1:D) # (freq_dims..., channels_out, batch)
+    y_padded = pad_constant(y, pad, zero(eltype(y)); dims=1:D)   # (freq_dims..., channels_out, batch)
     # apply inverse discrete Fourier transform: freq_dims -> spatial_dims
-    output = inverse(layer, y_padded, x)                       # (spatial_dims..., channels_out, batch)
+    output = inverse(layer, y_padded, x)                         # (spatial_dims..., channels_out, batch)
     return (output, states)
 end
 
@@ -119,8 +119,8 @@ end
 # complex-valued version
 function transform_and_truncate(
     layer::FactorizedSpectralConv{D},
-    x::AbstractArray{C}                              # (spatial_dims..., channels, batch)
-) where {D,C<:Complex}
+    x::DenseArray{C}                                 # (spatial_dims..., channels, batch)
+) where {D,C<:RComplexF32}
     dims = 1:D
     # compute discrete Fourier transform: spatial_dims -> freq_dims
     ω = fft(x, dims)                                 # (freq_dims..., channels, batch)
@@ -139,8 +139,8 @@ end
 # real-valued version
 function transform_and_truncate(
     layer::FactorizedSpectralConv{D},
-    x::AbstractArray{R}                              # (spatial_dims..., channels, batch)
-) where {D,R<:Real}
+    x::DenseArray{R}                                 # (spatial_dims..., channels, batch)
+) where {D,R<:RFloat32}
     dims = 1:D
     # since input is real-valued use rfft to take advantage of skew-symmetry
     ω = rfft(x, dims)                                # (freq_dims..., channels, batch)
@@ -161,8 +161,8 @@ end
 # real-valued 1D version
 function transform_and_truncate(
     layer::FactorizedSpectralConv{1},
-    x::AbstractArray{R,3}                            # (spatial_dim, channels, batch)
-) where {R<:Real}
+    x::DenseArray{R,3}                               # (spatial_dim, channels, batch)
+) where {R<:RFloat32}
     # since input is real-valued, use rfft, to take advantage of skew-symmetry
     ω = rfft(x, 1)                                   # (freq_dim, channels, batch)
     # take 1:(2k + 1)
@@ -176,40 +176,40 @@ end
 
 function inverse(
     layer::FactorizedSpectralConv{D},
-    ω_shifted::AbstractArray{C,N},                  # (freq_dims..., channels_out, batch)
-    x::AbstractArray{C,N}                           # (spatial_dims..., channels_in, batch)
-) where {D,C<:Complex,N}
+    ω_shifted::DenseArray{C,N},     # (freq_dims..., channels_out, batch)
+    x::DenseArray{C,N}              # (spatial_dims..., channels_in, batch)
+) where {D,C<:RComplexF32,N}
     ω = ifftshift(ω_shifted, 1:D)
-    y = ifft(ω, 1:D)                                # (spatial_dims..., channels_out, batch)
+    y = ifft(ω, 1:D)                # (spatial_dims..., channels_out, batch)
     return y
 end
 
 function inverse(
     layer::FactorizedSpectralConv{D},
-    ω_shifted::AbstractArray{C,N},                  # (freq_dims..., channels_out, batch)
-    x::AbstractArray{R,N}                           # (spatial_dims..., channels_in, batch)
-) where {D,C<:Complex,R<:Real,N}
+    ω_shifted::DenseArray{C,N},     # (freq_dims..., channels_out, batch)
+    x::DenseArray{R,N}              # (spatial_dims..., channels_in, batch)
+) where {D,C<:RComplexF32,R<:RFloat32,N}
     ω = ifftshift(ω_shifted, 2:D)
-    y = irfft(ω, size(x, 1), 1:D)                 # (spatial_dims..., channels_out, batch)
+    y = irfft(ω, size(x, 1), 1:D)   # (spatial_dims..., channels_out, batch)
     return y
 end
 
 function inverse(
     layer::FactorizedSpectralConv{1},
-    ω::AbstractArray{C,3},                           # (freq_dim, channels_out, batch)
-    x::AbstractArray{R,3}                            # (spatial_dim, channels_in, batch)
-) where {C<:Complex,R<:Real}
-    y = irfft(ω, size(x, 1), 1)                    # (spatial_dim, channels_out, batch)
+    ω::DenseArray{C,3},             # (freq_dim, channels_out, batch)
+    x::DenseArray{R,3}              # (spatial_dim, channels_in, batch)
+) where {C<:RComplexF32,R<:RFloat32}
+    y = irfft(ω, size(x, 1), 1)     # (spatial_dim, channels_out, batch)
     return y
 end
 
 # (modes..., ch_in, b) -> (modes..., ch_out, b)
 function compute_tensor_contractions(
-    x::AbstractArray{C,N},                                    # (modes..., ch_in, b)
+    x::DenseArray{C,N},                                       # (modes..., ch_in, b)
     U_in::DenseMatrix{C},                                     # (ch_in, r_in)
     U_out::DenseMatrix{C},                                    # (ch_out, r_out)
-    S::AbstractArray{C,N}                                     # (r_out, r_in, modes...)
-) where {C<:Complex,N}
+    S::DenseArray{C,N}                                        # (r_out, r_in, modes...)
+) where {C<:RComplexF32,N}
     (ch_in, r_in) = size(U_in)
     (ch_out, r_out) = size(U_out)
     dims = size(x)
@@ -235,33 +235,33 @@ function compute_tensor_contractions(
     return output
 end
 
-function permute_mode_dims(x::AbstractArray{T,3}) where {T}
+function permute_mode_dims(x::DenseArray{T,3}) where {T}
     # (m₁, r_in, b) -> (r_in, b, m₁)
     x_perm = permutedims(x, (2, 3, 1))
     return x_perm
 end
-function permute_mode_dims(x::AbstractArray{T,4}) where {T}
+function permute_mode_dims(x::DenseArray{T,4}) where {T}
     # (m₁, m₂, r_in, b) -> (r_in, b, m₁, m₂)
     x_perm = permutedims(x, (3, 4, 1, 2))
     return x_perm
 end
-function permute_mode_dims(x::AbstractArray{T,5}) where {T}
+function permute_mode_dims(x::DenseArray{T,5}) where {T}
     # (m₁, m₂, m₃, r_in, b) -> (r_in, b, m₁, m₂, m₃)
     x_perm = permutedims(x, (4, 5, 1, 2, 3))
     return x_perm
 end
 
-function unpermute_mode_dims(x_perm::AbstractArray{T,3}) where {T}
+function unpermute_mode_dims(x_perm::DenseArray{T,3}) where {T}
     # (r_out, b, m₁) -> (m₁, r_out, b)
     x = permutedims(x_perm, (3, 1, 2))
     return x
 end
-function unpermute_mode_dims(x_perm::AbstractArray{T,4}) where {T}
+function unpermute_mode_dims(x_perm::DenseArray{T,4}) where {T}
     # (r_out, b, m₁, m₂) -> (m₁, m₂, r_out, b)
     x = permutedims(x_perm, (3, 4, 1, 2))
     return x
 end
-function unpermute_mode_dims(x_perm::AbstractArray{T,5}) where {T}
+function unpermute_mode_dims(x_perm::DenseArray{T,5}) where {T}
     # (r_out, b, m₁, m₂, m₃) -> (m₁, m₂, m₃, r_out, b)
     x = permutedims(x_perm, (3, 4, 5, 1, 2))
     return x
@@ -271,7 +271,7 @@ struct ModeKProduct{K} end
 
 # mode-k tensor-matrix product via matricization followed by batched multiplication
 function (::ModeKProduct{K})(
-    tensor::AbstractArray{T,D}, matrix::AbstractMatrix{T}
+    tensor::DenseArray{T,D}, matrix::AbstractMatrix{T}
 ) where {K,T<:Number,D}
     dims = size(tensor)
     dims_before = NTuple{K-1,Int}(ntuple(i -> dims[i],   static(K-1)))
@@ -286,9 +286,9 @@ end
 
 # 1D case: (r_out × r_in × r₁) -> (r_out × r_in × m₁)
 function expand_tucker_core_tensor(
-    core::AbstractArray{C,3},                   # (r_out × r_in × r₁)
+    core::DenseArray{C,3},                      # (r_out × r_in × r₁)
     U_modes::NTuple{1,DenseMatrix{C}}           # (rₖ × mₖ)
-) where {C<:Complex}
+) where {C<:RComplexF32}
     # contract r₁ -> m₁
     mode_3_product = ModeKProduct{3}()
     S = mode_3_product(core, U_modes[1])        # (r_out × r_in × m₁)
@@ -297,9 +297,9 @@ end
 
 # 2D case: (r_out × r_in × r₁ × r₂) -> (r_out × r_in × m₁ × m₂)
 function expand_tucker_core_tensor(
-    core::AbstractArray{C,4},                   # (r_out × r_in × r₁ × r₂)
+    core::DenseArray{C,4},                      # (r_out × r_in × r₁ × r₂)
     U_modes::NTuple{2,DenseMatrix{C}}           # (rₖ × mₖ)
-) where {C<:Complex}
+) where {C<:RComplexF32}
     # contract r₁ -> m₁ (batching over r₂)
     mode_3_product = ModeKProduct{3}()
     core₂ = mode_3_product(core, U_modes[1])    # (r_out × r_in × m₁ × r₂)
@@ -311,9 +311,9 @@ end
 
 # 3D case: (r_out × r_in × r₁ × r₂ × r₃) -> (r_out × r_in × m₁ × m₂ × m₃)
 function expand_tucker_core_tensor(
-    core::AbstractArray{C,5},                   # (r_out × r_in × r₁ × r₂ × r₃)
+    core::DenseArray{C,5},                      # (r_out × r_in × r₁ × r₂ × r₃)
     U_modes::NTuple{3,DenseMatrix{C}}           # (rₖ × mₖ)
-) where {C<:Complex}
+) where {C<:RComplexF32}
     # contract r₁ -> m₁ (batching over r₂ × r₃)
     mode_3_product = ModeKProduct{3}()
     core₂ = mode_3_product(core, U_modes[1])    # (r_out × r_in × m₁ × r₂ × r₃)
@@ -328,9 +328,9 @@ end
 
 # # expand Tucker core tensor into full tensor via mode products with factor matrices
 # function expand_tucker_core_tensor(
-#     core::AbstractArray{T,D},           # (r_out, r_in, dims...)
-#     U_modes::NTuple{D,DenseMatrix{T}}   # (rₖ × mₖ)
-# ) where {T<:Number,D}
+#     core::DenseArray{C,N},              # (r_out, r_in, dims...)
+#     U_modes::NTuple{D,DenseMatrix{C}}   # (rₖ × mₖ)
+# ) where {C<:RComplexF32,N,D}
 #     for d in 1:D
 #         mode_k_product = ModeKProduct{d+2}()
 #         core = mode_k_product(core, U_modes[d])
