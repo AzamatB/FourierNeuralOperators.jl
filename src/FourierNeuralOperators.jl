@@ -14,8 +14,6 @@ using Reactant: TracedRNumber
 using NNlib: batched_mul, pad_constant
 using Static
 
-const RNumber{N} = Union{TracedRNumber{N},N} where {N<:Number}
-
 include("FactorizedSpectralConv.jl")
 
 include("SoftGating.jl")

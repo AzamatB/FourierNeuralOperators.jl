@@ -15,10 +15,10 @@ function OptimalTransportNeuralOperator{D}(
 end
 
 function (model::OptimalTransportNeuralOperator)(
-    (x, decoding_indices)::Tuple{DenseArray{R},DenseVector{I}},
+    (x, decoding_indices)::Tuple{DenseArray{Float32},DenseVector{Int32}},
     params::NamedTuple,
     states::NamedTuple
-) where {R<:RNumber{Float32},I<:RNumber{Int32}}
+)
     (y, states_out) = model.fno(x, params.fno, states.fno)
     y_vec = reshape(y, :)
     # pullback to physical space using decoding indices
