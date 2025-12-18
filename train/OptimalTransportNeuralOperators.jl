@@ -86,7 +86,7 @@ function train_model(
     dataset_dir::String;
     weights_save_dir = "pretrained_otno_weights",
     # set model hyperparameters
-    fno_modes::NTuple{L,Int}=(16, 16, 16, 16), # L = 4 FNO blocks in the FNO
+    modes::NTuple{L,Int}=(16, 16, 16, 16), # L = 4 FNO blocks in the FNO
     rank_ratio::Float32=0.5f0,
     # set training hyperparameters
     num_epochs::Integer,
@@ -105,7 +105,7 @@ function train_model(
 
     # instantiate FNO model
     model = FNO.OptimalTransportNeuralOperator{D}(
-        channels_in, channels_hidden, channels_out; fno_modes, rank_ratio
+        channels_in, channels_hidden, channels_out; modes, rank_ratio
     )
     display(model)
 
