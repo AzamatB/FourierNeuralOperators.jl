@@ -27,7 +27,8 @@ function (model::OptimalTransportNeuralOperator)(
     return (y_phys, states_out)
 end
 
-function evaluate_dataset_loss(
+# mean squared error (MSE) over a dataset
+function evaluate_dataset_mse(
     model::OptimalTransportNeuralOperator,
     params::NamedTuple,
     states::NamedTuple,
@@ -44,4 +45,44 @@ function evaluate_dataset_loss(
     num_samples = length(ys)
     mse = loss / num_samples
     return mse
+end
+
+# mean relative L² (%) error over a dataset
+function evaluate_dataset_mrl2e(
+    model::OptimalTransportNeuralOperator,
+    params::NamedTuple,
+    states::NamedTuple,
+    (xs, ys)::Tuple{Vector{<:Tuple{DenseArray{Float32},DenseVector{Int32}}},Vector{<:DenseVector{Float32}}}
+)
+    loss = 0.0f0
+    for (x, y) in zip(xs, ys)
+        (ŷ, _) = model(x, params, states)
+        numΔ = @. abs2(y - ŷ)
+        den = @. abs2(y)
+        loss += √(sum(numΔ)) / √(sum(den))
+    end
+    # a mean over all samples
+    num_samples = length(ys)
+    mrl2e = 100 * loss / num_samples
+    return mrl2e
+end
+
+# mean absolute percentage (%) error (MAPE) over a dataset
+function evaluate_dataset_mape(
+    model::OptimalTransportNeuralOperator,
+    params::NamedTuple,
+    states::NamedTuple,
+    (xs, ys)::Tuple{Vector{<:Tuple{DenseArray{Float32},DenseVector{Int32}}},Vector{<:DenseVector{Float32}}}
+)
+    loss = 0.0f0
+    for (x, y) in zip(xs, ys)
+        (ŷ, _) = model(x, params, states)
+        num_points = length(y)
+        Δ = @. abs((y - ŷ) / y)
+        loss += sum(Δ) / num_points
+    end
+    # a mean over all samples
+    num_samples = length(ys)
+    mape = 100 * loss / num_samples
+    return mape
 end
