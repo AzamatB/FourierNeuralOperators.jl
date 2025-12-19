@@ -4,7 +4,7 @@ import FourierNeuralOperators as FNO
 import OptimalTransportEncoding as OTE
 
 using FourierNeuralOperators
-using FourierNeuralOperators: OptimalTransportNeuralOperator, compute_dataset_loss
+using FourierNeuralOperators: OptimalTransportNeuralOperator, evaluate_dataset_loss
 using OptimalTransportEncoding
 using OptimalTransportEncoding: OTEDataSample
 using Printf
@@ -67,24 +67,25 @@ function get_model_inputs(sample::OTEDataSample)
 end
 
 function save_checkpoint(train_state::Training.TrainState, save_dir::String, epoch::Int)
+    model = train_state.model
     params = train_state.parameters |> cpu
     states = Lux.testmode(train_state.states) |> cpu
-    otno_weights = (; params, states)
-    weights_path = joinpath(save_dir, "otno_weights_epoch_$(epoch).jls")
+    otno_model = (; model, params, states)
+    otno_model_path = joinpath(save_dir, "otno_model_epoch_$(epoch).jls")
     # delete previously saved model parameters
     rm(save_dir; recursive=true, force=true)
     mkpath(save_dir)
     # save the current model parameters
-    open(weights_path, "w") do io
-        serialize(io, otno_weights)
+    open(otno_model_path, "w") do io
+        serialize(io, otno_model)
     end
-    return weights_path
+    return otno_model_path
 end
 
 function train_model(
     rng::AbstractRNG,
     dataset_dir::String;
-    weights_save_dir = "pretrained_otno_weights",
+    otno_model_save_dir="trained_otno_model",
     # set model hyperparameters
     modes::NTuple{L,Int}=(16, 16, 16, 16), # L = 4 FNO blocks in the FNO
     rank_ratio::Float32=0.5f0,
@@ -132,7 +133,7 @@ function train_model(
 
     # precompile model for validation evaluation
     states_val = Lux.testmode(train_state.states)
-    loss_val_min = compute_dataset_loss(
+    loss_val_min = evaluate_dataset_loss(
         model, train_state.parameters, states_val, (xs_val, ys_val)
     )
     @printf "Validation loss before training:  %4.6f\n" loss_val_min
@@ -151,14 +152,14 @@ function train_model(
 
         # evaluate the model on validation set
         states_val = Lux.testmode(train_state.states)
-        loss_val = compute_dataset_loss(
+        loss_val = evaluate_dataset_loss(
             model, train_state.parameters, states_val, (xs_val, ys_val)
         )
         @printf "Epoch [%3d]: Validation loss  %4.6f\n" epoch loss_val
         if loss_val < loss_val_min
             loss_val_min = loss_val
             @info "Saving pretrained model weights with validation loss  $loss_val_min"
-            save_checkpoint(train_state, weights_save_dir, epoch)
+            save_checkpoint(train_state, otno_model_save_dir, epoch)
         end
     end
     @info "Training completed."
@@ -167,8 +168,8 @@ end
 
 ############################################################################################
 
-const num_epochs = 500
+const num_epochs = 400
 const dataset_dir = normpath(joinpath(@__DIR__, "..", "datasets/ShapeNet-Car"))
-const weights_save_dir = normpath(joinpath(@__DIR__, "pretrained_otno_weights"))
+const otno_model_save_dir = normpath(joinpath(@__DIR__, "trained_otno_model"))
 
-@time (model, params_opt, states_val) = train_model(rng, dataset_dir; num_epochs, weights_save_dir)
+@time (model, params_opt, states) = train_model(rng, dataset_dir; num_epochs, otno_model_save_dir)

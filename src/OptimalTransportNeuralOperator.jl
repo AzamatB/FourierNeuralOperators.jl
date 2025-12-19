@@ -27,7 +27,7 @@ function (model::OptimalTransportNeuralOperator)(
     return (y_phys, states_out)
 end
 
-function compute_dataset_loss(
+function evaluate_dataset_loss(
     model::OptimalTransportNeuralOperator,
     params::NamedTuple,
     states::NamedTuple,
