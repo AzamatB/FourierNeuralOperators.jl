@@ -93,9 +93,11 @@ function train_model(
     loss_func = MSELoss()
 
     # precompile model for validation evaluation
+    x₁ = first(xs_val)
     states_val = Lux.testmode(train_state.states)
+    compiled_model = @compile model(x₁, train_state.parameters, states_val)
     loss_val_min = evaluate_dataset_mse(
-        model, train_state.parameters, states_val, (xs_val, ys_val)
+        compiled_model, train_state.parameters, states_val, (xs_val, ys_val)
     )
     @printf "Validation loss before training:  %4.6f\n" loss_val_min
 
@@ -114,7 +116,7 @@ function train_model(
         # evaluate the model on validation set
         states_val = Lux.testmode(train_state.states)
         loss_val = evaluate_dataset_mse(
-            model, train_state.parameters, states_val, (xs_val, ys_val)
+            compiled_model, train_state.parameters, states_val, (xs_val, ys_val)
         )
         @printf "Epoch [%3d]: Validation loss  %4.6f\n" epoch loss_val
         if loss_val < loss_val_min
@@ -124,7 +126,12 @@ function train_model(
         end
     end
     @info "Training completed."
-    return (; model, params=train_state.parameters, states=Lux.testmode(train_state.states))
+    output = (;
+        model=compiled_model,
+        params=train_state.parameters,
+        states=Lux.testmode(train_state.states)
+    )
+    return output
 end
 
 ############################################################################################
@@ -133,4 +140,4 @@ const num_epochs = 400
 const dataset_dir = normpath(joinpath(@__DIR__, "..", "datasets/ShapeNet-Car"))
 const otno_model_save_dir = normpath(joinpath(@__DIR__, "trained_otno_model"))
 
-@time (model, params_opt, states) = train_model(rng, dataset_dir; num_epochs, otno_model_save_dir)
+@time (model, params, states) = train_model(rng, dataset_dir; num_epochs, otno_model_save_dir)

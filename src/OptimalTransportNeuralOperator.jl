@@ -73,7 +73,7 @@ function evaluate_dataset_mape(
     params::NamedTuple,
     states::NamedTuple,
     (xs, ys)::Tuple{Vector{<:Tuple{DenseArray{R},DenseVector{I}}},Vector{<:DenseVector{R}}}
-) where {R<:RNumber{Float32},I<:RNumber{I}}
+) where {R<:RNumber{Float32},I<:RNumber{Int32}}
     loss = 0.0f0
     for (x, y) in zip(xs, ys)
         (ŷ, _) = model(x, params, states)
